@@ -39,7 +39,7 @@ def write_pointcloud(xyz_points,rgb_points,filename):
     fid.close()
 
 # K = np.array([[1733.74 ,0 ,792.27],[ 0, 1733.74 ,541.89],[0, 0, 1]],dtype=np.float32)
-calib_params = "D:/Downloads/Random Downloads/Pypylon-basler-calibration-basler_1600_60um-60uc-zain-290422/Pypylon-basler-calibration-basler_1600_60um-60uc-zain-290422/captured/calibrators/calibParams/"
+calib_params = "./calibrators/calibParams/"
 MLS = np.load(calib_params+'MLS.npy')
 MRS = np.load(calib_params+'MRS.npy')
 dLS = np.load(calib_params+'dLS.npy')
@@ -69,23 +69,23 @@ Translation = np.array([354.5368,-77.7998,-179.6456])
 #Specify image paths
 ldir = "D:/Downloads/Random Downloads/Pypylon-basler-calibration-basler_1600_60um-60uc-zain-290422/Pypylon-basler-calibration-basler_1600_60um-60uc-zain-290422/captured/test/left/"
 rdir = "D:/Downloads/Random Downloads/Pypylon-basler-calibration-basler_1600_60um-60uc-zain-290422/Pypylon-basler-calibration-basler_1600_60um-60uc-zain-290422/captured/test/right/"
-# ldir = "D:/Downloads/3D Module/structure-from-motion/sfm_images/3/"
+ldir = "D:/Downloads/3D Module/structure-from-motion/sfm_images/3/"
 
-img_no = 7
-img_path1 = ldir+f'{str(img_no)}.png'
-img_path2 = ldir+f'im1.png'
+img_no = 101
+img_path1 = f"./test/left/{str(img_no)}_L_.png"
+img_path2 = f"./test/right/{str(img_no)}_R_.png"
 print(img_path1)
 #Load pictures
-img_l = cv2.imread(img_path1,cv2.IMREAD_GRAYSCALE)
-img_r = cv2.imread(img_path2,cv2.IMREAD_GRAYSCALE)
+img_l = cv2.imread(img_path1,cv2.IMREAD_COLOR)
+img_r = cv2.imread(img_path2,cv2.IMREAD_COLOR)
 # cv2.imshow("s",img_r)
 # img_l = cv2.flip(img_l,0)
 # img_r = cv2.flip(img_r,0)
 
-plt.subplot(211)
+plt.subplot(131)
 plt.imshow(img_l)
 
-plt.subplot(212)
+plt.subplot(132)
 plt.imshow(img_r)
 
 #Get height and width. Note: It assumes that both pictures are the same size. They HAVE to be same size 
@@ -193,7 +193,7 @@ min_disp = 0
 max_disp = 10 #min_disp * 9
 num_disp = max_disp - min_disp # Needs to be divisible by 16
 #Create Block matching object. 
-stereo = cv2.StereoSGBM_create(minDisparity= 5,numDisparities = 592,blockSize = 5,uniquenessRatio = 2,speckleWindowSize = 128,speckleRange = 10,disp12MaxDiff = 1,P1 = 600,P2 = 2400) 
+stereo = cv2.StereoSGBM_create(minDisparity= 1,numDisparities = 368,blockSize = 7,uniquenessRatio = 10,speckleWindowSize = 100,speckleRange = 32,disp12MaxDiff = 5,P1 = 1176,P2 = 4704) 
 #Compute disparity map
 print ("\nComputing the disparity  map...")
 
@@ -226,7 +226,7 @@ focal_length = 4
 # #Link : https://ags.cs.uni-kl.de/fileadmin/inf_ags/3dcv-ws14-15/3DCV_lec01_camera.pdf
 Q2 = np.float32([[1,0,0,0],
     [0,-1,0,0],
-    [0,0,focal_length*0.01,0], #Focal length multiplication obtained experimentally. 
+    [0,0,focal_length*0.005,0], #Focal length multiplication obtained experimentally. 
     [0,0,0,1]])
 # # Third transformation matrix first two dont work 
 # Q3 = np.zeros((4,4))
@@ -266,23 +266,22 @@ Q2 = np.float32([[1,0,0,0],
 # pts2 = np.int32(pts2)
 
 # b_size = 15
-row,col = np.indices(prectL)
-h,w = prectL.shape[:2]
-small = prectL[5:h-5,5:w-5]
+# row,col = np.indices(prectL)
+# h,w = prectL.shape[:2]
+# small = prectL[5:h-5,5:w-5]
 
-def fun(row,col):
-    small[row,col] =  
-
-        # print(i,u,j,v)
-
-        # disp_1 = j-u
-
-        
+# local_max = disparity_sgbm.max()
+# local_min = disparity_sgbm.min()
+# print ("MAX " + str(local_max))
+# print ("MIN " + str(local_min))
+# disparity_sgbm = (disparity_sgbm-local_min)*(1.0/(local_max-local_min))  
 # plt.subplot(231)
 # plt.imshow(disparity_bm,'plasma')
+# disparity_sgbm = cv2.normalize(disparity_sgbm, 0, 255)
+plt.subplot(133)
+plt.imshow(disparity_sgbm,'jet')
 
-plt.subplot(325)
-plt.imshow(disparity_sgbm,'rainbow')
+plt.show()
 # plt.subplot(326)
 # plt.imshow(disparity_sift,'plasma')
 # plt.subplot(234)
@@ -297,10 +296,13 @@ plt.imshow(disparity_sgbm,'rainbow')
 # cv2.imwrite(f"disparity_bm{img_no}.png",disparity_bm)
 # cv2.imwrite(f"disparity_sgbm{img_no}.png",disparity_sgbm)
 # # cv2.imwrite(f"disparity_sift{img_no}.png",disparity_sift)
+# print(disparity_sgbm.dtype)
+# disparity_sgbm = np.float32(np.divide(disparity_sgbm,16)) 
+# print(disparity_sgbm.dtype)
 
-# #Reproject points into 3D
+# #Reproject points into 3D d
 # points_3D_bm = cv2.reprojectImageTo3D(disparity_bm, Q2)
-points_3D_sgbm = cv2.reprojectImageTo3D(disparity_sgbm, Q2)
+points_3D_sgbm = cv2.reprojectImageTo3D(disparity_sgbm, Q2.astype(np.float32),handleMissingValues=False)
 # points_3D_sift = cv2.reprojectImageTo3D(disparity_sift, Q2)
 # #Get color points
 colors = cv2.cvtColor(img_l, cv2.COLOR_BGR2RGB)
@@ -315,7 +317,7 @@ mask_map = np.ones(disparity_sgbm.shape[:2],dtype=np.bool)
 output_points_sgbm = points_3D_sgbm[mask_map]
 # output_points_sift = points_3D_sift[mask_map]
 output_colors = colors[mask_map]
-plt.show()
+
 # #Define name for output file
 # output_points = np.where(np.isinf(output_points_sgbm),0,output_points_sgbm)
 # z_values  = output_points[:,2]
