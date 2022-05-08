@@ -1,2 +1,3 @@
-# Stereo-3D-Reconstruction
-3D Reconstruction Pipeline using Basler Cameras in Stereo Configuration
+# Pypylon-basler-calibration
+### 29 Apr 2022
+Calibrating the Basler cameras using PyPylon SDK
