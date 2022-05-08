@@ -1,7 +1,8 @@
 import cv2
 import os
+from mpl_toolkits import mplot3d
 from matplotlib import pyplot as plt
-from matplotlib.widgets import Slider, Button
+from matplotlib.widgets import Slider, Button,TextBox
 import numpy as np
 import json
 import stereo_setting as stset
@@ -39,24 +40,6 @@ def write_pointcloud(xyz_points,rgb_points,filename):
 
 
 # Rectifying the images
-img_no = 101
-imgL, imgR = cv2.imread(f"./test/left/{str(img_no)}_L_.png"), cv2.imread(f"./test/right/{str(img_no)}_R_.png")
-print(imgL.shape[:2])
-print('IMAGES LOADED')
-print(100*'#')
-
-vert, hori = imgL.shape[:2]
-left_stereo_map, right_stereo_map, _ = stset.st_maps("./calibrators/calibParams/", (hori, vert))
-print('MAPS COMPUTED')
-print(100*'#')
-
-rectL, rectR = stset.st_rectify(imgL, imgR, left_stereo_map, right_stereo_map)
-#rectL, rectR = cv2.imread("./singlerun/rectL2.png"), cv2.imread("./singlerun/rectR2.png")
-print('RECTIFIED')
-print(100*'#')
-grayL = cv2.cvtColor(rectL, cv2.COLOR_BGR2GRAY)
-grayR = cv2.cvtColor(rectR, cv2.COLOR_BGR2GRAY)
-rectified_pair = (grayR, grayL)
 
 # Depth map function
 '''
@@ -83,6 +66,66 @@ DMD = 5
 P1 = 8*3*BS**2
 P2 = 32*3*BS**2 
 Qscale=0.01
+
+img_no = 101
+imgL, imgR = cv2.imread(f"./test/left/{str(img_no)}_L_.png"), cv2.imread(f"./test/right/{str(img_no)}_R_.png")
+print(imgL.shape[:2])
+print('IMAGES LOADED')
+print(100*'#')
+vert, hori = imgL.shape[:2]
+left_stereo_map, right_stereo_map, _ = stset.st_maps("./calibrators/calibParams/", (hori, vert))
+print('MAPS COMPUTED')
+print(100*'#')
+rectL, rectR = stset.st_rectify(imgL, imgR, left_stereo_map, right_stereo_map)
+#rectL, rectR = cv2.imread("./singlerun/rectL2.png"), cv2.imread("./singlerun/rectR2.png")
+print('RECTIFIED')
+print(100*'#')
+grayL = cv2.cvtColor(rectL, cv2.COLOR_BGR2GRAY)
+grayR = cv2.cvtColor(rectR, cv2.COLOR_BGR2GRAY)
+rectified_pair = (grayR, grayL)
+axcolor = 'lightgoldenrodyellow'
+fig = plt.subplots(1,2)
+plt.subplots_adjust(left=0.15, bottom=0.5)
+plt.subplot(1,2,1)
+dmObject = plt.imshow(rectified_pair[0], 'gray')
+
+
+def submit(text):
+    ydata = eval(text)
+    global img_no,imgL,imgR,rectified_pair,dmObject,actual
+    img_no = ydata
+    imgL, imgR = cv2.imread(f"./test/left/{str(img_no)}_L_.png"), cv2.imread(f"./test/right/{str(img_no)}_R_.png")
+    print(imgL.shape[:2])
+    print('IMAGES LOADED')
+    print(100*'#')
+
+    vert, hori = imgL.shape[:2]
+    left_stereo_map, right_stereo_map, _ = stset.st_maps("./calibrators/calibParams/", (hori, vert))
+    print('MAPS COMPUTED')
+    print(100*'#')
+
+    rectL, rectR = stset.st_rectify(imgL, imgR, left_stereo_map, right_stereo_map)
+    #rectL, rectR = cv2.imread("./singlerun/rectL2.png"), cv2.imread("./singlerun/rectR2.png")
+    print('RECTIFIED')
+    print(100*'#')
+    grayL = cv2.cvtColor(rectL, cv2.COLOR_BGR2GRAY)
+    grayR = cv2.cvtColor(rectR, cv2.COLOR_BGR2GRAY)
+    rectified_pair = (grayR, grayL)
+    plt.subplot(1,2,1)
+    dmObject = plt.imshow(rectified_pair[0], 'gray')
+
+    disparity,actual = stereo_depth_map(rectified_pair)
+
+    plt.subplot(1,2,2)
+    dmObject = plt.imshow(disparity, aspect='equal', cmap='gray')
+
+
+axbox = plt.axes([0.27, 0.92, 0.15, 0.04])
+text_box = TextBox(axbox, 'Image # ', initial="100")
+text_box.on_submit(submit)
+
+
+
 def stereo_depth_map(rectified_pair):
     print ('BS='+str(BS)+' MDS='+str(MDS)+' NOD='+str(NOD)+' UR='+\
            str(UR)+' SPWS='+str(SPWS)+' SR='+str(SR))
@@ -118,15 +161,14 @@ def stereo_depth_map(rectified_pair):
     #disparity_visual = np.array(disparity_visual)
     return disparity_visual,disparity
 
-disparity,actual = stereo_depth_map(rectified_pair)
-
 # Set up and draw interface
 # Draw left image and depth map
-axcolor = 'lightgoldenrodyellow'
-fig = plt.subplots(1,2)
-plt.subplots_adjust(left=0.15, bottom=0.5)
-plt.subplot(1,2,1)
-dmObject = plt.imshow(rectified_pair[0], 'gray')
+
+disparity,actual = stereo_depth_map(rectified_pair)
+
+plt.subplot(1,2,2)
+dmObject = plt.imshow(disparity, aspect='equal', cmap='gray')
+
 
 saveax = plt.axes([0.3, 0.42, 0.15, 0.04]) #stepX stepY width height
 buttons = Button(saveax, 'Save settings', color=axcolor, hovercolor='0.975')
@@ -178,9 +220,6 @@ def load_map_settings( event ):
 
 buttonl.on_clicked(load_map_settings)
 
-
-plt.subplot(1,2,2)
-dmObject = plt.imshow(disparity, aspect='equal', cmap='gray')
 
 # Draw interface for adjusting parameters
 print('Start interface creation (it takes up to 30 seconds)...')
@@ -237,19 +276,24 @@ def updatedepthmap(event):
 buttonu.on_clicked(updatedepthmap)
 
 def reconstruct3D(event):
+    # ax = plt.axes(projection='3d')
+    
     button3D.label.set_text("Reconstructing")
     focal_length = 4
     Q2 = np.float32([[1,0,0,0],
     [0,-1,0,0],
     [0,0,focal_length*Qscale,0], #Focal length multiplication obtained experimentally. 
     [0,0,0,1]])
-
-    points_3D_sgbm = cv2.reprojectImageTo3D(actual, Q2.astype(np.float32),handleMissingValues=False)
+    realdisp = np.float32(np.divide(actual,16))
+    otherpoints = MLS[]
+    points_3D_sgbm = cv2.reprojectImageTo3D(realdisp, Q2.astype(np.float32),handleMissingValues=False)
     colors = cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB)
     mask_map = np.ones(actual.shape[:2],dtype=np.bool)
     output_points_sgbm = points_3D_sgbm[mask_map]
     output_colors = colors[mask_map]
     output_file_sgbm = f'SGBM{str(img_no)}.ply'
+    
+    # ax.scatter(output_points_sgbm[:,0], output_points_sgbm[:,1], output_points_sgbm[:,2], c = output_colors/255, s=0.01)
     print (" Creating the output file... ")
     write_pointcloud(output_points_sgbm, output_colors, output_file_sgbm)
     print ("\n  output file created. \n")
