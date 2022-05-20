@@ -1,28 +1,54 @@
 import cv2
 import os
-from mpl_toolkits import mplot3d
+from tempmatchdisp import customdisparity 
 from matplotlib import pyplot as plt
 from matplotlib.widgets import Slider, Button,TextBox
 import numpy as np
 import json
 import stereo_setting as stset
 import struct
+# from tempmatchdisp import customdisparity
+from tqdm import tqdm
+box_size=30
+def mapfunc(i,j):
+    
+    global imgL,imgR,box_size
+    print(i,j)
+    template = imgL[i:i+2*box_size,j:j+2*box_size]
+    searchstrip = imgR[i:i+2*box_size,:]
+    # print(searchstrip.shape)
+    # print(template.shape)
+    result = cv2.matchTemplate(searchstrip,template,cv2.TM_CCOEFF_NORMED)
+    minval,maxval,minLoc,maxLoc=cv2.minMaxLoc(result)
+ 
 
-def write_pointcloud(xyz_points,rgb_points,filename):
+
+def customdispari(imgL,imgR):
+    x,y = np.indices((imgL.shape[0],imgL.shape[1]))
+    vecfunc = np.vectorize(mapfunc)
+    ufunc = np.frompyfunc(mapfunc,2,1)
+    disparity = np.zeros(imgL.shape,dtype=np.uint8)
+    disparity = ufunc(x,y)
+    print(disparity)
+    cv2.imshow("N",disparity.astype(np.uint8))    
+
+
+
+def write_pointcloud(output_points_sgbm_points,rgb_points,filename):
 
     """ creates a .pkl file of the point clouds generated
     """
 
-    assert xyz_points.shape[1] == 3,'Input XYZ points should be Nx3 float array'
+    assert output_points_sgbm_points.shape[1] == 3,'Input output_points_sgbm points should be Nx3 float array'
     if rgb_points is None:
-        rgb_points = np.ones(xyz_points.shape).astype(np.uint8)*255
-    assert xyz_points.shape == rgb_points.shape,'Input RGB colors should be Nx3 float array and have same size as input XYZ points'
+        rgb_points = np.ones(output_points_sgbm_points.shape).astype(np.uint8)*255
+    assert output_points_sgbm_points.shape == rgb_points.shape,'Input RGB colors should be Nx3 float array and have same size as input output_points_sgbm points'
 
     # Write header of .ply file
     fid = open(filename,'wb')
     fid.write(bytes('ply\n', 'utf-8'))
     fid.write(bytes('format binary_little_endian 1.0\n', 'utf-8'))
-    fid.write(bytes('element vertex %d\n'%xyz_points.shape[0], 'utf-8'))
+    fid.write(bytes('element vertex %d\n'%output_points_sgbm_points.shape[0], 'utf-8'))
     fid.write(bytes('property float x\n', 'utf-8'))
     fid.write(bytes('property float y\n', 'utf-8'))
     fid.write(bytes('property float z\n', 'utf-8'))
@@ -32,8 +58,8 @@ def write_pointcloud(xyz_points,rgb_points,filename):
     fid.write(bytes('end_header\n', 'utf-8'))
 
     # Write 3D points to .ply file
-    for i in range(xyz_points.shape[0]):
-        fid.write(bytearray(struct.pack("fffccc",xyz_points[i,0],xyz_points[i,1],xyz_points[i,2],
+    for i in range(output_points_sgbm_points.shape[0]):
+        fid.write(bytearray(struct.pack("fffccc",output_points_sgbm_points[i,0],output_points_sgbm_points[i,1],output_points_sgbm_points[i,2],
                                         rgb_points[i,0].tobytes(),rgb_points[i,1].tobytes(),
                                         rgb_points[i,2].tobytes())))
     fid.close()
@@ -67,13 +93,13 @@ P1 = 8*3*BS**2
 P2 = 32*3*BS**2 
 Qscale=0.01
 
-img_no = 101
+img_no = 0
 imgL, imgR = cv2.imread(f"./test/left/{str(img_no)}_L_.png"), cv2.imread(f"./test/right/{str(img_no)}_R_.png")
 print(imgL.shape[:2])
 print('IMAGES LOADED')
 print(100*'#')
 vert, hori = imgL.shape[:2]
-left_stereo_map, right_stereo_map, _ = stset.st_maps("./calibrators/calibParams/", (hori, vert))
+left_stereo_map, right_stereo_map, Q ,lcam_mtx,rcam_mtx= stset.st_maps("./calibrators/calibParams/", (hori, vert))
 print('MAPS COMPUTED')
 print(100*'#')
 rectL, rectR = stset.st_rectify(imgL, imgR, left_stereo_map, right_stereo_map)
@@ -86,7 +112,7 @@ rectified_pair = (grayR, grayL)
 axcolor = 'lightgoldenrodyellow'
 fig = plt.subplots(1,2)
 plt.subplots_adjust(left=0.15, bottom=0.5)
-plt.subplot(1,2,1)
+plt.subplot(1,3,1)
 dmObject = plt.imshow(rectified_pair[0], 'gray')
 
 
@@ -100,7 +126,7 @@ def submit(text):
     print(100*'#')
 
     vert, hori = imgL.shape[:2]
-    left_stereo_map, right_stereo_map, _ = stset.st_maps("./calibrators/calibParams/", (hori, vert))
+    left_stereo_map, right_stereo_map, Q ,lcam_mtx,rcam_mtx = stset.st_maps("./calibrators/calibParams/", (hori, vert))
     print('MAPS COMPUTED')
     print(100*'#')
 
@@ -111,14 +137,16 @@ def submit(text):
     grayL = cv2.cvtColor(rectL, cv2.COLOR_BGR2GRAY)
     grayR = cv2.cvtColor(rectR, cv2.COLOR_BGR2GRAY)
     rectified_pair = (grayR, grayL)
-    plt.subplot(1,2,1)
+    plt.subplot(1,3,1)
     dmObject = plt.imshow(rectified_pair[0], 'gray')
 
-    disparity,actual = stereo_depth_map(rectified_pair)
-
-    plt.subplot(1,2,2)
-    dmObject = plt.imshow(disparity, aspect='equal', cmap='gray')
-
+    disparity,tmdisp= stereo_depth_map(rectified_pair)
+    #,tmdisp,tmdisp_visual 
+    plt.subplot(1,3,2)
+    dmObject = plt.imshow(disparity, aspect='equal', cmap='jet')
+    plt.subplot(1,3,3)
+    dmObject = plt.imshow(tmdisp, aspect='equal', cmap='jet')
+    
 
 axbox = plt.axes([0.27, 0.92, 0.15, 0.04])
 text_box = TextBox(axbox, 'Image # ', initial="100")
@@ -153,28 +181,50 @@ def stereo_depth_map(rectified_pair):
     print ("MAX " + str(local_max))
     print ("MIN " + str(local_min))
     disparity_visual = (disparity-local_min)*(1.0/(local_max-local_min))
+    disparity_visual = np.where((disparity_visual>0.90),0,disparity_visual)
+    disparity_visual = np.where((disparity_visual<0.15),0,disparity_visual)
+    disparity = (local_max-local_min)*disparity_visual+local_min
     local_max = disparity_visual.max()
     local_min = disparity_visual.min()
     print ("MAX " + str(local_max))
     print ("MIN " + str(local_min))
-    #cv.Normalize(disparity, disparity_visual, 0, 255, cv.CV_MINMAX)
-    #disparity_visual = np.array(disparity_visual)
-    return disparity_visual,disparity
+    print("Template matching Disparity")
+    tmdisp    = customdisparity(dmLeft,dmRight,11,300)
+
+    print(type(tmdisp))
+    tmdisp  = np.asarray(tmdisp)
+    tmdisp = np.float32(tmdisp)
+    
+    local_max = tmdisp.max()
+    local_min = tmdisp.min()
+    print ("MAX " + str(local_max))
+    print ("MIN " + str(local_min))
+    tmdisp_visual = (tmdisp-local_min)*(1.0/(local_max-local_min))
+    print(cv2.imwrite("tmdisp.png",tmdisp_visual.astype(np.uint8)))
+    local_max = tmdisp_visual.max()
+    local_min = tmdisp_visual.min()
+    print ("MAX " + str(local_max))
+    print ("MIN " + str(local_min))
+
+    return disparity,tmdisp
 
 # Set up and draw interface
+
 # Draw left image and depth map
 
-disparity,actual = stereo_depth_map(rectified_pair)
-
-plt.subplot(1,2,2)
-dmObject = plt.imshow(disparity, aspect='equal', cmap='gray')
+disparity,tmdisp = stereo_depth_map(rectified_pair)
+#  
+plt.subplot(1,3,2)
+dmObject = plt.imshow(disparity, aspect='equal', cmap='jet')
+plt.subplot(1,3,3)
+dmObject = plt.imshow(tmdisp, aspect='equal', cmap='jet')
 
 
 saveax = plt.axes([0.3, 0.42, 0.15, 0.04]) #stepX stepY width height
 buttons = Button(saveax, 'Save settings', color=axcolor, hovercolor='0.975')
 
 
-def save_map_settings( event ):
+def save_map_settings( event ): 
     buttons.label.set_text ("Saving...")
     print('Saving to file...') 
     result = json.dumps({'ImageNo':img_no,'blockSize':BS, 'minDisparity':MDS, 'numDisparities':NOD, \
@@ -235,7 +285,7 @@ SRaxe = plt.axes([0.15, 0.29, 0.7, 0.025], facecolor=axcolor) #stepX stepY width
 SPWSaxe = plt.axes([0.15, 0.33, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
 Qscaleaxe = plt.axes([0.15, 0.37, 0.7, 0.025], facecolor=axcolor)
 sBS = Slider(SWSaxe, 'BlockSize', 5.0, 255.0, valinit=5)
-sMDS = Slider(PFSaxe, 'MinDisp', -100.0, 100.0, valinit=5)
+sMDS = Slider(PFSaxe, 'MinDisp', -600.0, 100.0, valinit=5)
 sNOD = Slider(PFCaxe, 'NumOfDisp', 16.0, 640.0, valinit=16)
 sUR = Slider(MDSaxe, 'UnicRatio', 1.0, 20.0, valinit=2)
 sSPWS = Slider(NODaxe, 'SpklWinSze', 0.0, 300.0, valinit=128)
@@ -264,6 +314,7 @@ def updatedepthmap(event):
         buttonu.label.set_text("Updating")
         update(0)
         disparity,actual = stereo_depth_map(rectified_pair)
+        depth = 300*4/np.float32(np.divide(actual,16))
         dmObject.set_data(disparity)
         print('Saving disp map!')
         disp, cdisp = color_disparity_map(disparity)
@@ -274,31 +325,77 @@ def updatedepthmap(event):
         buttonu.label.set_text("Updated")
 
 buttonu.on_clicked(updatedepthmap)
-
+root = "./calibrators/calibParams/"
+R = np.load(root+"R.npy")
+T = np.load(root+"T.npy")
+D1 = np.load(root+"dLS.npy")
+D2 = np.load(root+"dRS.npy")
 def reconstruct3D(event):
     # ax = plt.axes(projection='3d')
-    
     button3D.label.set_text("Reconstructing")
+    # output_points_sgbm = cv2.omnidir.stereoReconstruct(imgL,imgR,lcam_mtx,rcam_mtx)
     focal_length = 4
     Q2 = np.float32([[1,0,0,0],
     [0,-1,0,0],
     [0,0,focal_length*Qscale,0], #Focal length multiplication obtained experimentally. 
     [0,0,0,1]])
+    # mask_map = np.ones(actual.shape[:2],dtype=np.bool)
+    
     realdisp = np.float32(np.divide(actual,16))
-    otherpoints = MLS[]
-    points_3D_sgbm = cv2.reprojectImageTo3D(realdisp, Q2.astype(np.float32),handleMissingValues=False)
+    
+    # Homo = np.ones((actual.shape[0],actual.shape[1]),dtype=np.float32)  
+    fx,fy = lcam_mtx[0,0],lcam_mtx[1,1]
+
+    f = np.sqrt(np.square(fx)+np.square(fy))
+    Z = 300*f/-realdisp
+    Z = np.where(np.isinf(Z),0,Z)
+    XY=np.indices((Z.shape))
+    yl,xl=XY[0],XY[1]
+    X = xl*Z/fx
+    Y = yl*Z/fy 
+    otherpoints = np.zeros((realdisp.shape[0],realdisp.shape[1],3),dtype=np.float32)
+    otherpoints[:,:,0] = X
+    otherpoints[:,:,1] = Y
+    otherpoints[:,:,2] = Z     
+    print(lcam_mtx)
+    # print(rcam_mtx)
+    # Q[2][3] = 0.004
+    # Q[3][2]=1/-0.03
+    # Q[3,3] =lcam_mtx[0][2]-rcam_mtx[0][2]/-0.03 
+    print(Q)
+    points_3D_sgbm = cv2.reprojectImageTo3D(realdisp, Q.astype(np.float32),handleMissingValues=False,ddepth=-1)
+    # print (points_3D_sgbm.shape,points_3D_sgbm.dtype)
+    output_points_sgbm = points_3D_sgbm[realdisp != 0]#otherpoints[realdisp!=0]
+    
     colors = cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB)
-    mask_map = np.ones(actual.shape[:2],dtype=np.bool)
-    output_points_sgbm = points_3D_sgbm[mask_map]
-    output_colors = colors[mask_map]
+    # output_points_sgbm = otherpoints[mask_map]
+    
+    output_colors = colors[realdisp!=0]
+    # output_points = np.where(np.isinf(output_points_sgbm),0,output_points_sgbm)
+    # output_points_sgbm = output_points_sgbm[np.invert(np.isinf(output_points_sgbm))]
+    # print(output_points_sgbm.shape)
+    # # (output_points[:,2]<-6.5e+3)&
+    # # (output_points[:,2]<-6.5e+3)
+
+    # z = output_points[:,2]
+    # y = sorted(z)
+    # x = np.arange(0,len(y))
+    # plt.figure()
+    # plt.hist(y,bins=50)
+    # plt.show()
+    
     output_file_sgbm = f'SGBM{str(img_no)}.ply'
     
+    print(output_points_sgbm)
     # ax.scatter(output_points_sgbm[:,0], output_points_sgbm[:,1], output_points_sgbm[:,2], c = output_colors/255, s=0.01)
     print (" Creating the output file... ")
     write_pointcloud(output_points_sgbm, output_colors, output_file_sgbm)
-    print ("\n  output file created. \n")
+    print (f"\n  output file {output_file_sgbm} created. \n")
     button3D.label.set_text("Reconstructed")
 
+    # plt.figure(2)
+    # ax = plt.axes(projection='3d')
+    # ax.scatter(output_points_sgbm[:,0], output_points_sgbm[:,1], output_points_sgbm[:,2], c = output_colors/255, s=0.01)
 
 
 
@@ -321,9 +418,6 @@ def update(val):
     P1 = 8*3*BS**2#int(sP1.val)
     P2 = 32*3*BS**2#int(sP2.val)
     Qscale = float(sQscale.val)
-    button3D.label.set_text("3DRecon")
-    buttonu.label.set_text("Update Map")
-
 
     
 # Connect update actions to control elements
@@ -340,3 +434,6 @@ sQscale.on_changed(update)
 
 print('Show interface to user')
 plt.show()
+
+# plt.imshow(tmdisp_visual)
+# plt.show()
