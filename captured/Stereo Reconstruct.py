@@ -112,35 +112,35 @@ prectR = cv2.remap(img_r,right_stereo_map[0], right_stereo_map[1], cv2.INTER_LAN
 # plt.imshow(prectR,"gray")
 
 
-# sift = cv2.SIFT_create()
-# # find the keypoints and descriptors with SIFT
-# kp1, des1 = sift.detectAndCompute(prectL, None)
-# kp2, des2 = sift.detectAndCompute(prectR, None)
-# FLANN_INDEX_KDTREE = 1
-# index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-# search_params = dict(checks=50)   # or pass empty dictionary
-# flann = cv2.FlannBasedMatcher(index_params, search_params)
-# matches = flann.knnMatch(des1, des2, k=2)
+sift = cv2.SIFT_create()
+# find the keypoints and descriptors with SIFT
+kp1, des1 = sift.detectAndCompute(prectL, None)
+kp2, des2 = sift.detectAndCompute(prectR, None)
+FLANN_INDEX_KDTREE = 1
+index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+search_params = dict(checks=50)   # or pass empty dictionary
+flann = cv2.FlannBasedMatcher(index_params, search_params)
+matches = flann.knnMatch(des1, des2, k=2)
 
-# # Keep good matches: calculate distinctive image features
-# # Lowe, D.G. Distinctive Image Features from Scale-Invariant Keypoints. International Journal of Computer Vision 60, 91–110 (2004). https://doi.org/10.1023/B:VISI.0000029664.99615.94
-# # https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
-# matchesMask = [[0, 0] for i in range(len(matches))]
-# good = []
-# pts1 = []
-# pts2 = []
+# Keep good matches: calculate distinctive image features
+# Lowe, D.G. Distinctive Image Features from Scale-Invariant Keypoints. International Journal of Computer Vision 60, 91–110 (2004). https://doi.org/10.1023/B:VISI.0000029664.99615.94
+# https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
+matchesMask = [[0, 0] for i in range(len(matches))]
+good = []
+pts1 = []
+pts2 = []
 
-# for i, (m, n) in enumerate(matches):
-#     if m.distance < 0.7*n.distance:
-#         # Keep this keypoint pair
-#         matchesMask[i] = [1, 0]
-#         good.append(m)
-#         pts2.append(kp2[m.trainIdx].pt)
-#         pts1.append(kp1[m.queryIdx].pt)
+for i, (m, n) in enumerate(matches):
+    if m.distance < 0.7*n.distance:
+        # Keep this keypoint pair
+        matchesMask[i] = [1, 0]
+        good.append(m)
+        pts2.append(kp2[m.trainIdx].pt)
+        pts1.append(kp1[m.queryIdx].pt)
 
 
-# pts1 = np.int32(pts1)
-# pts2 = np.int32(pts2)
+pts1 = np.int32(pts1)
+pts2 = np.int32(pts2)
 
 
 # fundamental_matrix, inliers = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC)

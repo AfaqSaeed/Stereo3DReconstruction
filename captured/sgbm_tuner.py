@@ -82,20 +82,21 @@ cv2.StereoSGBM_create(
     speckleRange=None, 
     mode=None)
 '''
-BS = 7
-MDS = 1
-NOD = 192
+BS = 5
+MDS = 0
+NOD = 304
 UR = 10
-SPWS = 100
-SR = 32
+SPWS = 0.95
+SR = 0.15
 DMD = 5
-P1 = 8*3*BS**2
-P2 = 32*3*BS**2 
+P1 = 8*5*BS**2
+P2 = 32*5*BS**2 
 Qscale=0.01
-
-img_no = 0
+img_no = 119
 imgL, imgR = cv2.imread(f"./test/left/{str(img_no)}_L_.png"), cv2.imread(f"./test/right/{str(img_no)}_R_.png")
 print(imgL.shape[:2])
+
+actual= np.zeros((imgL.shape[:2]),np.uint32)
 print('IMAGES LOADED')
 print(100*'#')
 vert, hori = imgL.shape[:2]
@@ -108,12 +109,76 @@ print('RECTIFIED')
 print(100*'#')
 grayL = cv2.cvtColor(rectL, cv2.COLOR_BGR2GRAY)
 grayR = cv2.cvtColor(rectR, cv2.COLOR_BGR2GRAY)
+cv2.imwrite(f"./rectified/{str(img_no)}_L_.png",grayL)
+cv2.imwrite(f"./rectified/{str(img_no)}_R_.png",grayR)
+
 rectified_pair = (grayR, grayL)
 axcolor = 'lightgoldenrodyellow'
 fig = plt.subplots(1,2)
+cyan = np.zeros((grayL.shape[0],grayL.shape[1],3),dtype=np.uint8)
+red = np.zeros((grayL.shape[0],grayL.shape[1],3),dtype=np.uint8)
+cyan[:,:,0] = np.zeros((grayL.shape),dtype=np.uint8)
+cyan[:,:,1] = grayR
+cyan[:,:,2] = grayR
+
+red[:,:,0] = grayL
+red[:,:,1] = np.zeros((grayL.shape[:2]),dtype=np.uint8)
+red[:,:,2] = np.zeros((grayL.shape[:2]),dtype=np.uint8)
+
+
+Anaglyph = red+cyan 
 plt.subplots_adjust(left=0.15, bottom=0.5)
-plt.subplot(1,3,1)
-dmObject = plt.imshow(rectified_pair[0], 'gray')
+plt.subplot(1,2,1)
+dmObject = plt.imshow(Anaglyph, 'gray')
+
+
+
+
+def keypointdisparity(imgL,imgR):
+    sift = cv2.SIFT_create()
+# find the keypoints and descriptors with SIFT
+    kp1, des1 = sift.detectAndCompute(imgL, None)
+    kp2, des2 = sift.detectAndCompute(imgR, None)
+    FLANN_INDEX_KDTREE = 1
+    index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+    search_params = dict(checks=50)   # or pass empty dictionary
+    flann = cv2.FlannBasedMatcher(index_params, search_params)
+    matches = flann.knnMatch(des1, des2, k=2)
+
+    # Keep good matches: calculate distinctive image features
+    # Lowe, D.G. Distinctive Image Features from Scale-Invariant Keypoints. International Journal of Computer Vision 60, 91–110 (2004). https://doi.org/10.1023/B:VISI.0000029664.99615.94
+    # https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
+    matchesMask = [[0, 0] for i in range(len(matches))]
+    good = []
+    pts1 = []
+    pts2 = []
+
+    for i, (m, n) in enumerate(matches):
+        if m.distance < 0.7*n.distance:
+            # Keep this keypoint pair
+            matchesMask[i] = [1, 0]
+            good.append(m)
+            ptsR.append(kp2[m.trainIdx].pt)
+            ptsL.append(kp1[m.queryIdx].pt)
+
+
+    ptsL = np.int32(ptsL)
+    ptsR = np.int32(ptsR)
+    # remove any points that are not nearly horizontal
+    yL = ptsL[:,1]
+    yR = ptsR[:,1]
+    
+    diff = yL-yR
+    ptsL = ptsL[diff < 10]
+    ptsR = ptsR[diff < 10]
+
+    disparity = np.zeros(imgL.shape[:-2],dtype=np.uint8)
+    blob_size = 3
+    for ptsl,ptsr in zip(ptsL,ptsR):
+        d = ptsr[0]-ptsl[0]
+        disparity[ptsl[0]-blob_size:ptsl[0]+blob_size,ptsl[1]-blob_size:ptsl[1]+blob_size] =  d
+    
+    return disparity
 
 
 def submit(text):
@@ -137,15 +202,33 @@ def submit(text):
     grayL = cv2.cvtColor(rectL, cv2.COLOR_BGR2GRAY)
     grayR = cv2.cvtColor(rectR, cv2.COLOR_BGR2GRAY)
     rectified_pair = (grayR, grayL)
-    plt.subplot(1,3,1)
-    dmObject = plt.imshow(rectified_pair[0], 'gray')
+    cv2.imwrite(f"./rectified/{str(img_no)}_L_.png",grayL)
+    cv2.imwrite(f"./rectified/{str(img_no)}_R_.png",grayR)
 
-    disparity,tmdisp= stereo_depth_map(rectified_pair)
+    cyan = np.zeros((grayL.shape[0],grayL.shape[1],3),dtype=np.uint8)
+    red = np.zeros((grayL.shape[0],grayL.shape[1],3),dtype=np.uint8)
+    cyan[:,:,0] = np.zeros((grayL.shape),dtype=np.uint8)
+    cyan[:,:,1] = grayR
+    cyan[:,:,2] = grayR
+
+    red[:,:,0] = grayL
+    red[:,:,1] = np.zeros((grayL.shape[:2]),dtype=np.uint8)
+    red[:,:,2] = np.zeros((grayL.shape[:2]),dtype=np.uint8)
+
+
+    Anaglyph = red+cyan 
+
+    plt.subplot(1,2,1)
+    dmObject = plt.imshow(Anaglyph, 'gray')
+
+    disparity= stereo_depth_map(rectified_pair)
     #,tmdisp,tmdisp_visual 
-    plt.subplot(1,3,2)
+    plt.subplot(1,2,2)
     dmObject = plt.imshow(disparity, aspect='equal', cmap='jet')
-    plt.subplot(1,3,3)
-    dmObject = plt.imshow(tmdisp, aspect='equal', cmap='jet')
+    # plt.subplot(1,4,3)
+    # dmObject = plt.imshow(tmdispL, aspect='equal', cmap='jet')
+    # plt.subplot(1,4,4)
+    # dmObject = plt.imshow(tmdispR, aspect='equal', cmap='jet')
     
 
 axbox = plt.axes([0.27, 0.92, 0.15, 0.04])
@@ -160,64 +243,87 @@ def stereo_depth_map(rectified_pair):
     print (' DMD='+str(DMD)+' P1='+str(P1)+' P2='+str(P2))
     c, r = rectified_pair[0].shape
     disparity = np.zeros((c, r), np.uint8)
-    sbm = cv2.StereoSGBM_create(numDisparities=16, blockSize=15)
-    sbm.setBlockSize(BS)
-    sbm.setMinDisparity(MDS)
-    sbm.setNumDisparities(NOD)
+    sbm = cv2.StereoBM_create(numDisparities=NOD, blockSize=BS)
+    sbm.setSmallerBlockSize(BS)
+    # sbm.setMinDisparity(MDS)
+    # sbm.setNumDisparities(NOD)
     sbm.setUniquenessRatio(UR)
-    sbm.setSpeckleWindowSize(SPWS)
-    sbm.setSpeckleRange(SR)
-    sbm.setDisp12MaxDiff(DMD)
-    sbm.setP1(8*3*BS**2)
-    sbm.setP2(32*3*BS**2)
+    print(sbm.getTextureThreshold())
+    sbm.setTextureThreshold(NOD)
+    # sbm.setSpeckleWindowSize(SPWS)
+    # sbm.setSpeckleRange(SR)
+    # sbm.setDisp12MaxDiff(DMD)
+    # sbm.setP1(8*3*BS**2)
+    # sbm.setP2(32*3*BS**2)
 
-    dmLeft = rectified_pair[0]
-    dmRight = rectified_pair[1]
+    dmRight = rectified_pair[0]
+    dmLeft = rectified_pair[1]
     #cv2.FindStereoCorrespondenceBM(dmLeft, dmRight, disparity, sbm)
-    disparity = sbm.compute(dmLeft, dmRight)
+    disparity = sbm.compute(dmRight, dmLeft)
     #disparity_visual = cv.CreateMat(c, r, cv.CV_8U)
     local_max = disparity.max()
     local_min = disparity.min()
     print ("MAX " + str(local_max))
     print ("MIN " + str(local_min))
     disparity_visual = (disparity-local_min)*(1.0/(local_max-local_min))
-    disparity_visual = np.where((disparity_visual>0.90),0,disparity_visual)
-    disparity_visual = np.where((disparity_visual<0.15),0,disparity_visual)
+    disparity_visual = np.where((disparity_visual>SPWS),0,disparity_visual)
+    disparity_visual = np.where((disparity_visual<SR),0,disparity_visual)
     disparity = (local_max-local_min)*disparity_visual+local_min
     local_max = disparity_visual.max()
     local_min = disparity_visual.min()
     print ("MAX " + str(local_max))
     print ("MIN " + str(local_min))
-    print("Template matching Disparity")
-    tmdisp    = customdisparity(dmLeft,dmRight,11,300)
+    # print("Template matching Disparity")
+    # tmdispL   = customdisparity(dmLeft,dmRight,5,400,0)
 
-    print(type(tmdisp))
-    tmdisp  = np.asarray(tmdisp)
-    tmdisp = np.float32(tmdisp)
+    # tmdispL  = np.asarray(tmdispL)
+
+    # tmdispR   = customdisparity(dmLeft,dmRight,5,400,1)
+    # tmdispR  = np.asarray(tmdispR)
+
     
-    local_max = tmdisp.max()
-    local_min = tmdisp.min()
-    print ("MAX " + str(local_max))
-    print ("MIN " + str(local_min))
-    tmdisp_visual = (tmdisp-local_min)*(1.0/(local_max-local_min))
-    print(cv2.imwrite("tmdisp.png",tmdisp_visual.astype(np.uint8)))
-    local_max = tmdisp_visual.max()
-    local_min = tmdisp_visual.min()
-    print ("MAX " + str(local_max))
-    print ("MIN " + str(local_min))
+    # tmdispL = np.float32(tmdispL)
+    
+    # local_max = tmdispL.max()
+    # local_min = tmdispL.min()
+    # print ("MAX " + str(local_max))
+    # print ("MIN " + str(local_min))
+    # tmdispL_visual = (tmdispL-local_min)*(1.0/(local_max-local_min))
+    # print(cv2.imwrite("tmdispL.png",tmdispL_visual.astype(np.uint8)))
+    # local_max = tmdispL_visual.max()
+    # local_min = tmdispL_visual.min()
+    # print ("MAX " + str(local_max))
+    # print ("MIN " + str(local_min))
 
-    return disparity,tmdisp
+    # tmdispR  = tmdisp[:,:,1]
+    
+    # tmdispR = np.float32(tmdispR)
+    
+    # local_max = tmdispR.max()
+    # local_min = tmdispR.min()
+    # print ("MAX " + str(local_max))
+    # print ("MIN " + str(local_min))
+    # tmdispR_visual = (tmdispR-local_min)*(1.0/(local_max-local_min))
+    # print(cv2.imwrite("tmdispL.png",tmdispR_visual.astype(np.uint8)))
+    # local_max = tmdispR_visual.max()
+    # local_min = tmdispR_visual.min()
+    # print ("MAX " + str(local_max))
+    # print ("MIN " + str(local_min))
+
+    return disparity
 
 # Set up and draw interface
 
 # Draw left image and depth map
 
-disparity,tmdisp = stereo_depth_map(rectified_pair)
+disparity = stereo_depth_map(rectified_pair)
 #  
-plt.subplot(1,3,2)
+plt.subplot(1,2,2)
 dmObject = plt.imshow(disparity, aspect='equal', cmap='jet')
-plt.subplot(1,3,3)
-dmObject = plt.imshow(tmdisp, aspect='equal', cmap='jet')
+# plt.subplot(1,4,3)
+# dmObject = plt.imshow(tmdispL, aspect='equal', cmap='jet')
+# plt.subplot(1,4,4)
+# dmObject = plt.imshow(tmdispR, aspect='equal', cmap='jet')
 
 
 saveax = plt.axes([0.3, 0.42, 0.15, 0.04]) #stepX stepY width height
@@ -284,12 +390,12 @@ URaxe = plt.axes([0.15, 0.25, 0.7, 0.025], facecolor=axcolor) #stepX stepY width
 SRaxe = plt.axes([0.15, 0.29, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
 SPWSaxe = plt.axes([0.15, 0.33, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
 Qscaleaxe = plt.axes([0.15, 0.37, 0.7, 0.025], facecolor=axcolor)
-sBS = Slider(SWSaxe, 'BlockSize', 5.0, 255.0, valinit=5)
-sMDS = Slider(PFSaxe, 'MinDisp', -600.0, 100.0, valinit=5)
+sBS = Slider(SWSaxe, 'BlockSize', 5.0, 25.0, valinit=5)
+sMDS = Slider(PFSaxe, 'MinDisp', -600, 0, valinit=0)
 sNOD = Slider(PFCaxe, 'NumOfDisp', 16.0, 640.0, valinit=16)
 sUR = Slider(MDSaxe, 'UnicRatio', 1.0, 20.0, valinit=2)
-sSPWS = Slider(NODaxe, 'SpklWinSze', 0.0, 300.0, valinit=128)
-sSR = Slider(TTHaxe, 'SpcklRng', 0.0, 40.0, valinit=10)
+sSPWS = Slider(NODaxe, 'SpklWinSze', 0.0, 1.0, valinit=0.95)
+sSR = Slider(TTHaxe, 'SpcklRng', 0.0, 1.0, valinit=0.15)
 sDMD = Slider(URaxe, 'DispMaxDiff', 1.0, 20.0, valinit=10)
 sP1 = Slider(SRaxe, 'P_1', 0.0, 5000.0, valinit=15)
 sP2 = Slider(SPWSaxe, 'P_2', 0.0, 5000.0, valinit=15)
@@ -308,23 +414,6 @@ def color_disparity_map(disparity):
 #enddef
 
 uax= plt.axes([0.5, 0.42, 0.15, 0.04])
-buttonu = Button(uax, 'Update Map', color=axcolor, hovercolor='0.975')
-def updatedepthmap(event):
-        print ('Rebuilding depth map')
-        buttonu.label.set_text("Updating")
-        update(0)
-        disparity,actual = stereo_depth_map(rectified_pair)
-        depth = 300*4/np.float32(np.divide(actual,16))
-        dmObject.set_data(disparity)
-        print('Saving disp map!')
-        disp, cdisp = color_disparity_map(disparity)
-        cv2.imwrite('./disp.png', cdisp)
-        print ('Redraw depth map')
-
-        plt.draw()
-        buttonu.label.set_text("Updated")
-
-buttonu.on_clicked(updatedepthmap)
 root = "./calibrators/calibParams/"
 R = np.load(root+"R.npy")
 T = np.load(root+"T.npy")
@@ -364,13 +453,18 @@ def reconstruct3D(event):
     # Q[3,3] =lcam_mtx[0][2]-rcam_mtx[0][2]/-0.03 
     print(Q)
     points_3D_sgbm = cv2.reprojectImageTo3D(realdisp, Q.astype(np.float32),handleMissingValues=False,ddepth=-1)
-    # print (points_3D_sgbm.shape,points_3D_sgbm.dtype)
-    output_points_sgbm = points_3D_sgbm[realdisp != 0]#otherpoints[realdisp!=0]
+    print (points_3D_sgbm.shape,points_3D_sgbm.dtype)
+    
+    plt.figure()
+    plt.imshow(points_3D_sgbm[:,:,2])
+    plt.show()
+
+    output_points_sgbm = points_3D_sgbm[realdisp <= 0]#otherpoints[realdisp!=0]
     
     colors = cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB)
     # output_points_sgbm = otherpoints[mask_map]
     
-    output_colors = colors[realdisp!=0]
+    output_colors = colors[realdisp<=0]
     # output_points = np.where(np.isinf(output_points_sgbm),0,output_points_sgbm)
     # output_points_sgbm = output_points_sgbm[np.invert(np.isinf(output_points_sgbm))]
     # print(output_points_sgbm.shape)
@@ -408,17 +502,24 @@ button3D.on_clicked(reconstruct3D)
 
 # Update depth map parameters and redraw
 def update(val):
-    global loading_settings, BS, MDS, NOD, UR, SPWS, SR, DMD, P1, P2,Qscale
+    global loading_settings, BS, MDS, NOD, UR, SPWS, SR, DMD, P1, P2,Qscale,actual
     BS = int(sBS.val/2)*2+1 #convert to ODD   
     MDS = int(sMDS.val)    
     NOD = int(sNOD.val/16)*16
     UR = int(sUR.val)  
-    SPWS= int(sSPWS.val)
-    SR = int(sSR.val)
+    SPWS= float(sSPWS.val)
+    SR = float(sSR.val)
     P1 = 8*3*BS**2#int(sP1.val)
     P2 = 32*3*BS**2#int(sP2.val)
     Qscale = float(sQscale.val)
+    print ('Rebuilding depth map')
+    actual = stereo_depth_map(rectified_pair)
+      
+    plt.subplot(1,2,2)
+    dmObject = plt.imshow(actual, aspect='equal', cmap='jet')
+    print ('Redraw depth map')
 
+    plt.draw()
     
 # Connect update actions to control elements
 sBS.on_changed(update)
