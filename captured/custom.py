@@ -1,14 +1,14 @@
-from dis import dis
 import cv2
 import os
 
-from torch import negative
+from kiwisolver import Constraint
+
 from tempmatchdisp import keydisparity 
 from matplotlib import pyplot as plt
-from matplotlib.widgets import Slider, Button,TextBox
+from matplotlib.widgets import Slider, Button,TextBox, RectangleSelector
 import numpy as np
 import json
-import stereo_setting as stset
+import stset as stset
 import struct
 from tempmatchdisp import customdisparity
 from tqdm import tqdm
@@ -42,17 +42,25 @@ def write_pointcloud(output_points_sgbm_points,rgb_points,filename):
                                         rgb_points[i,0].tobytes(),rgb_points[i,1].tobytes(),
                                         rgb_points[i,2].tobytes())))
     fid.close()
-
-BS = 7
-WS = 7
+scat  = None
+svat = None
+lgend = None
+redpts = None
+bluepts = None
+BS = 5
+WS = 30
 NOD = 192
 UR = 10
 highf = 100
 lowf = 32
 K = 0.6
-I = 0.3
-P2 = 32*3*BS**2 
+I = 0.0
+SR = 10
 Qscale=0.01
+ptsL =[[]]
+ptsR = [[]]
+nptsL =[[]]
+nptsR = [[]]
 
 img_no = 8
 imgL, imgR = cv2.imread(f"./test/left/{str(img_no)}_L_.png"), cv2.imread(f"./test/right/{str(img_no)}_R_.png")
@@ -71,28 +79,104 @@ grayL = cv2.cvtColor(rectL, cv2.COLOR_BGR2GRAY)
 grayR = cv2.cvtColor(rectR, cv2.COLOR_BGR2GRAY)
 rectified_pair = (grayR, grayL)
 axcolor = 'lightgoldenrodyellow'
-fig = plt.subplots(1,2)
-plt.subplots_adjust(left=0.15, bottom=0.5)
-plt.subplot(1,4,1)
+fig = plt.figure(1)
+fig.subplots_adjust(left=0.15, bottom=0.5)
+axs = fig.subplots(1,3)
 
-cyan = np.zeros((grayL.shape[0],grayL.shape[1],3),dtype=np.uint8)
-red = np.zeros((grayL.shape[0],grayL.shape[1],3),dtype=np.uint8)
-cyan[:,:,0] = np.zeros((grayL.shape),dtype=np.uint8)
-cyan[:,:,1] = grayR
-cyan[:,:,2] = grayR
+axs[0].imshow(rectR)
 
-red[:,:,0] = grayL
-red[:,:,1] = np.zeros((grayL.shape[:2]),dtype=np.uint8)
-red[:,:,2] = np.zeros((grayL.shape[:2]),dtype=np.uint8)
+####################################################################
+# Code For Rectangle Zoom inspector currently not working correctly     
 
 
-Anaglyph = red+cyan 
+# selector =[]
 
-dmObject = plt.imshow(Anaglyph)
+# def get_nearest(pts,pt):
+#     diff = pts-pt
+    
+#     dist = np.linalg.norm(diff,axis=1)
+#     indx = np.argsort(dist)
+#     return indx[0]
 
-def siftkpts(rectL,rectR,fthresh,three=True):
-    sift = cv2.SIFT_create()
+# def select_callback(eclick, erelease):
+#     """
+#     Callback for line selection.
+
+#     *eclick* and *erelease* are the press and release events.
+#     """
+#     global ptsL,ptsR,nptsL,nptsR,scat,svat,lgend,redpts,bluepts
+#     x1, y1 = eclick.xdata, eclick.ydata
+#     x2, y2 = erelease.xdata, erelease.ydata
+#     x1, y1 = int(x1), int(y1)
+#     x2, y2 = int(x2), int(y2)
+#     print(f"({x1:3.2f}, {y1:3.2f}) --> ({x2:3.2f}, {y2:3.2f})")
+#     # Find Center of box
+#     center = np.array([int((x1+x2)/2),int((y1+y2)/2)])
+#     # find width and height of box
+#     wby2,hby2 = int((x2-x1)/2),int((y2-y1)/2) # halved for conveinence in top-left point calculation from center in right image
+#     print("Width , Height = " ,(wby2,hby2))
+#     # Find Points that arre inside the box
+
+#     checkptsL = (ptsL[:,0]>x1) & (ptsL[:,0]<x2) & (ptsL[:,1]>y1) & (ptsL[:,1]<y2)
+#     redptsL = ptsL[checkptsL]
+#     redptsR = ptsR[checkptsL]
+#     # Find Point that is nearest to the center
+
+#     rindx  = get_nearest(redptsL,center)
+#     # calculate centers of box location in left and right image
+#     Lcenter = redptsL[rindx]
+#     Rcenter = redptsR[rindx]
+#     print("Lcenter,Rcenter",Lcenter,Rcenter)
+
+#     # crop in left image and right image of size (h,w)
+#     Lcrop = rectL[Lcenter[1] - hby2:Lcenter[1] + hby2,Lcenter[0] - wby2:Lcenter[0] + wby2]
+#     Rcrop = rectR[Rcenter[1] - hby2:Rcenter[1] + hby2,Rcenter[0] - wby2:Rcenter[0] + wby2]
+#     # calcualte topleft points in order to change coordinate frames
+#     topleftL = (x1,y1)
+#     topleftR = Rcenter - (wby2,hby2)
+#     # change cordinate frames
+#     cropptsL = redptsL-topleftL
+#     cropptsR = redptsR-(topleftR)+(wby2*2,0)
+#     #combine two crops
+#     comb = cv2.hconcat([Lcrop,Rcrop]) 
+#     for ptl,ptr in zip(cropptsL,cropptsR):
+#         color = list(np.random.random(size=3) * 256)
+#         comb = cv2.circle(comb,ptl,1,color,1)
+#         comb = cv2.circle(comb,ptr,1,color,1)
+#         comb = cv2.line(comb ,ptl,ptr,color,1)
+#     cv2.imshow("new",comb)
+#     cv2.waitKey(0)
+#     cv2.destroyAllWindows()
+
+        
+
+
+
+
+
+
+
+
+# sfig = plt.figure(2)
+# axs2 = sfig.subplots(2)
+
+# selector_class = RectangleSelector
+# axs2[0].imshow(rectL)
+# axs2[1].imshow(rectR)  # plot something
+# # axs[0].set_title(f"Click and drag to draw a {selector_class.__name__}.")
+# selector.append(selector_class(
+# axs2[0], select_callback,
+#         useblit=True,
+#         button=[1, 3],  # disable middle button
+#         minspanx=5, minspany=5,
+#         spancoords='pixels',
+#         interactive=False))
+
+
 # find the keypoints and descriptors with SIFT
+def siftkpts(rectL,rectR,fthresh):
+    sift = cv2.SIFT_create()
+
     kp1, des1 = sift.detectAndCompute(rectL, None)
     kp2, des2 = sift.detectAndCompute(rectR, None)
     FLANN_INDEX_KDTREE = 1
@@ -108,7 +192,6 @@ def siftkpts(rectL,rectR,fthresh,three=True):
     # Lowe, D.G. Distinctive Image Features from Scale-Invariant Keypoints. International Journal of Computer Vision 60, 91–110 (2004). https://doi.org/10.1023/B:VISI.0000029664.99615.94
     # https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
     matchesMask = [[0, 0] for i in range(len(matches))]
-    good = []
     ptsL = []
     ptsR = []
 
@@ -116,19 +199,12 @@ def siftkpts(rectL,rectR,fthresh,three=True):
         if m.distance < fthresh*n.distance:
             # Keep this keypoint pair
             matchesMask[i] = [1, 0]
-            good.append(m)
             ptsR.append(kp2[m.trainIdx].pt)
             ptsL.append(kp1[m.queryIdx].pt)
 
-    if three:
-        kp_img = cv2.drawMatches(rectL, kp1, rectR, kp2, good, None,matchColor=-1, flags=2)
-        
     ptsL = np.int32(ptsL)
     ptsR = np.int32(ptsR)
-    if three:
-        return ptsL,ptsR,kp_img
-    else:
-        return ptsL,ptsR
+    return ptsL,ptsR
 # To keep variables in a specified range
 def bound(var,limit,max):
     if max:
@@ -138,7 +214,7 @@ def bound(var,limit,max):
         if var<limit:
             var = limit
     return var               
-def filterbadkpoints(ptsL,ptsR,epsilon=2,rneg=True):
+def filterbadkpoints(ptsL,ptsR,epsilon=5,rneg=False):
     
     # remove negative disparity
     if rneg:
@@ -183,9 +259,10 @@ def getmorekeypoints(rectL,rectR,ptsL,ptsR,win_size,K,I):
              if left.shape != right.shape:
                  continue
              try:
-                zptsl,zptsr = siftkpts(left,right,K+I,False)
+                zptsl,zptsr = siftkpts(left,right,K+I)
                 filterbadkpoints(zptsl,zptsr,rneg=False)
              except:
+                 print("Getting more Kpts sift failed")
                  continue
              zptsl,zptsr = zptsl-win_size,zptsr-win_size
              
@@ -206,7 +283,9 @@ def drawdisparity(imshape,nptsL,nptsR):
     return disparity
 
 def kpdisp2ndpass(rectL,rectR,K):
-    ptsL,ptsR,kp_img = siftkpts(rectL,rectR,K)
+    global ptsL,ptsR,nptsL,nptsR
+    ptsL,ptsR = siftkpts(rectL,rectR,K)
+    
     print("Points Before Filtering",ptsR.shape) 
     ptsL,ptsR = filterbadkpoints(ptsL,ptsR)
     print("Points After Filtering",ptsR.shape ) 
@@ -219,26 +298,30 @@ def kpdisp2ndpass(rectL,rectR,K):
     return disparity
 
 def kpdisp1stpass(rectL,rectR,K):
-    ptsL,ptsR,kp_img = siftkpts(rectL,rectR,K)
+    global ptsL,ptsR
+    ptsL,ptsR = siftkpts(rectL,rectR,K)
     print("Points Before Filtering",ptsR.shape) 
     ptsL,ptsR = filterbadkpoints(ptsL,ptsR)
     print("Points After Filtering",ptsR.shape ) 
+    # axs2[0].scatter(ptsL[:,0],ptsL[:,1],c="b",s=0.1,label="First")
+    # axs2[1].scatter(ptsR[:,0],ptsR[:,1],c="r",s=0.1,label="First")
+    
     disparity = drawdisparity(rectL.shape,ptsL,ptsR)
     return disparity
 
 def submit(text):
     ydata = eval(text)
-    global img_no,imgL,imgR,rectified_pair,dmObject,tmdispL,tmdispR
+    global img_no,imgL,imgR,rectified_pair,tmdispL,tmdispR,rectL,rectR
     img_no = ydata
     imgL, imgR = cv2.imread(f"./test/left/{str(img_no)}_L_.png"), cv2.imread(f"./test/right/{str(img_no)}_R_.png")
     print(imgL.shape[:2])
     print('IMAGES LOADED')
-    print(100*'#')
+
 
     vert, hori = imgL.shape[:2]
     left_stereo_map, right_stereo_map, Q ,lcam_mtx,rcam_mtx = stset.st_maps("./calibrators/calibParams/", (hori, vert))
     print('MAPS COMPUTED')
-    print(100*'#')
+
 
     rectL, rectR = stset.st_rectify(imgL, imgR, left_stereo_map, right_stereo_map)
     print('RECTIFIED')
@@ -246,17 +329,14 @@ def submit(text):
     grayL = cv2.cvtColor(rectL, cv2.COLOR_BGR2GRAY)
     grayR = cv2.cvtColor(rectR, cv2.COLOR_BGR2GRAY)
     rectified_pair = (grayR, grayL)
-    plt.subplot(1,4,1)
-    dmObject = plt.imshow(rectified_pair[0], 'gray')
+    axs[0].imshow(rectified_pair[0], 'gray')
 
     tmdispL,tmdispR= stereo_depth_map(rectified_pair)
-    plt.subplot(1,4,2)
-    dmObject = plt.imshow(tmdispL, aspect='equal', cmap='jet')
-    plt.subplot(1,4,3)
-    dmObject = plt.imshow(tmdispR, aspect='equal', cmap='jet')
+    axs[1].imshow(tmdispL, aspect='equal', cmap='jet')
+    axs[2].imshow(tmdispR, aspect='equal', cmap='jet')
     
 
-axbox = plt.axes([0.27, 0.92, 0.15, 0.04])
+axbox = fig.add_axes([0.27, 0.95, 0.15, 0.04])
 text_box = TextBox(axbox, 'Image # ', initial="100")
 text_box.on_submit(submit)
 
@@ -267,14 +347,14 @@ def stereo_depth_map(rectified_pair):
     dmRight = rectified_pair[1]
 
     print ('BS='+str(BS)+' WS='+str(WS)+' NOD='+str(NOD)+' UR='+\
-           str(UR)+' SPWS='+str(highf)+' SR='+str(lowf))
-    print (' K='+str(K)+' I='+str(I)+' P2='+str(P2))
+           str(UR)+' High='+str(highf)+' LowFilt='+str(lowf))
+    print (' K='+str(K)+' I='+str(I)+' SR='+str(SR))
     
 
     print("Keypoint matching Disparity")
     tmdispL   = kpdisp1stpass(dmLeft,dmRight,K)#customdisparity(dmLeft,dmRight,BS,NOD,0,WS)
 
-    tmdispR   = kpdisp2ndpass(dmLeft,dmRight,K)
+    tmdispR   = keydisparity(dmLeft,dmRight,BS,ptsL,ptsR,WS,SR)
     # tmdispR  = np.zeros(dmLeft.shape[:2])
 
     return tmdispL,tmdispR
@@ -284,14 +364,16 @@ def stereo_depth_map(rectified_pair):
 # Draw left image and depth map
 
 tmdispL,tmdispR = stereo_depth_map(rectified_pair)
+
+
+
 #  
-plt.subplot(1,3,2)
-dmObject = plt.imshow(tmdispL, aspect='equal', cmap='jet')
-plt.subplot(1,3,3)
-dmObject = plt.imshow(tmdispR, aspect='equal', cmap='jet')
+
+axs[1].imshow(tmdispL, aspect='equal', cmap='jet')
+axs[2].imshow(tmdispR, aspect='equal', cmap='jet')
 
 
-saveax = plt.axes([0.3, 0.42, 0.15, 0.04]) #stepX stepY width height
+saveax = fig.add_axes([0.3, 0.42, 0.15, 0.04]) #stepX stepY width height
 buttons = Button(saveax, 'Save settings', color=axcolor, hovercolor='0.975')
 
 
@@ -300,7 +382,7 @@ def save_map_settings( event ):
     print('Saving to file...') 
     result = json.dumps({'ImageNo':img_no,'blockSize':BS, 'WindowSize':WS, 'numDisparities':NOD, \
              'uniquenessRatio':UR, 'HighFilter':highf, 'LowFilter':lowf, \
-             'Kvalue':K, 'I':I, 'P2':P2,'Qscale':Qscale},\
+             'Kvalue':K, 'I':I, 'SR':SR,'Qscale':Qscale},\
              sort_keys=True, indent=4, separators=(',',':'))
     fName = 'TMDisp3D.txt'
     f = open (str(fName), 'w') 
@@ -311,10 +393,10 @@ def save_map_settings( event ):
 
 buttons.on_clicked(save_map_settings)
 
-loadax = plt.axes([0.1, 0.42, 0.15, 0.04]) #stepX stepY width height
+loadax = fig.add_axes([0.1, 0.42, 0.15, 0.04]) #stepX stepY width height
 buttonl = Button(loadax, 'Load settings', color=axcolor, hovercolor='0.975')
 def load_map_settings( event ):
-    global loading_settings, BS, WS, NOD, UR, highf, lowf, K, I, P2
+    global loading_settings, BS, WS, NOD, UR, highf, lowf, K, I, SR
     loading_settings = 1
     fName = '3dmap_set.txt'
     print('Loading parameters from file...')
@@ -329,7 +411,7 @@ def load_map_settings( event ):
     slowf.set_val(data['LowFilter'])
     sK.set_val(data['Kvalue'])
     sI.set_val(data['I'])
-    sP2.set_val(data['P2'])
+    sSR.set_val(data['SR'])
     sQscale.set_val(data['Qscale'])
     f.close()
     buttonl.label.set_text ("Load settings")
@@ -345,25 +427,25 @@ buttonl.on_clicked(load_map_settings)
 # Draw interface for adjusting parameters
 print('Start interface creation (it takes up to 30 seconds)...')
 
-SWSaxe = plt.axes([0.15, 0.01, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
-PFSaxe = plt.axes([0.15, 0.05, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
-PFCaxe = plt.axes([0.15, 0.09, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
-WSaxe = plt.axes([0.15, 0.13, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
-NODaxe = plt.axes([0.15, 0.17, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
-TTHaxe = plt.axes([0.15, 0.21, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
-URaxe = plt.axes([0.15, 0.25, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
-SRaxe = plt.axes([0.15, 0.29, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
-SPWSaxe = plt.axes([0.15, 0.33, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
-Qscaleaxe = plt.axes([0.15, 0.37, 0.7, 0.025], facecolor=axcolor)
+SWSaxe = fig.add_axes([0.15, 0.01, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
+PFSaxe = fig.add_axes([0.15, 0.05, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
+PFCaxe = fig.add_axes([0.15, 0.09, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
+WSaxe = fig.add_axes([0.15, 0.13, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
+NODaxe = fig.add_axes([0.15, 0.17, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
+TTHaxe = fig.add_axes([0.15, 0.21, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
+URaxe = fig.add_axes([0.15, 0.25, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
+SRaxe = fig.add_axes([0.15, 0.29, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
+SPWSaxe = fig.add_axes([0.15, 0.33, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
+Qscaleaxe = fig.add_axes([0.15, 0.37, 0.7, 0.025], facecolor=axcolor)
 sBS = Slider(SWSaxe, 'BlockSize', 0.0, 100.0, valinit=5)
-sWS = Slider(PFSaxe, 'WindowSize', 0, 100.0, valinit=5)
-sNOD = Slider(PFCaxe, 'NumOfDisp', 0.0, 1600.0-BS, valinit=300)
+sWS = Slider(PFSaxe, 'WindowSize', 0, 100.0, valinit=30)
+sNOD = Slider(PFCaxe, 'NumOfDisp', 0.0, 120, valinit=30)
 sUR = Slider(WSaxe, 'UnicRatio', 1.0, 20.0, valinit=2)
 shighf = Slider(NODaxe, 'FHighThresh', 0.0, 1.0, valinit=0.95)
 slowf = Slider(TTHaxe, 'FLowThresh', 0.0, 1.0, valinit=0.15)
-sK = Slider(URaxe, 'KPOrgThresh', 0.0, 1.0, valinit=0.8)
-sI = Slider(SRaxe, 'KpIncThresh', 0.0, 1.0, valinit=0.2)
-sP2 = Slider(SPWSaxe, 'P_2', 0.0, 5000.0, valinit=15)
+sK = Slider(URaxe, 'KPOrgThresh', 0.0, 1.0, valinit=0.6)
+sI = Slider(SRaxe, 'KpIncThresh', 0.0, 1.0, valinit=0.0)
+sSR = Slider(SPWSaxe, 'SR', 0.0, 120.0, valinit=10)
 sQscale = Slider(Qscaleaxe, 'Q', 0.0000, 1.0000, valinit=0.01)
 
 # Produce the colormap disparity image
@@ -377,7 +459,7 @@ def color_disparity_map(disparity):
     norm_coeff = 255 / disparity.max()
     return disparity * norm_coeff / 255, disparity_color
 
-uax= plt.axes([0.5, 0.42, 0.15, 0.04])
+uax= fig.add_axes([0.5, 0.42, 0.15, 0.04])
 buttonu = Button(uax, 'Update Map', color=axcolor, hovercolor='0.975')
 def updatedepthmap(event):
         global dmObject,tmdispL,tmdispR
@@ -386,10 +468,9 @@ def updatedepthmap(event):
         update(0)
         tmdispL,tmdispR= stereo_depth_map(rectified_pair)
         
-        plt.subplot(1,3,2)
-        dmObject = plt.imshow(tmdispL, aspect='equal', cmap='jet')
-        plt.subplot(1,3,3)
-        dmObject = plt.imshow(tmdispR, aspect='equal', cmap='jet')
+        
+        axs[1].imshow(tmdispL, aspect='equal', cmap='jet')
+        axs[2].imshow(tmdispR, aspect='equal', cmap='jet')
 
 
         print('Saving disp map!')
@@ -410,12 +491,12 @@ def reconstruct3D(event):
     # ax = plt.axes(projection='3d')
     global tmdispL,tmdispR
     
-    plt.figure(2,constrained_layout=True)
+    plt.figure(3,constrained_layout=True)
     button3D.label.set_text("Reconstructing")
     
     
-    realdisp = np.float32(tmdispL)
-    disp2nd =  np.float32(tmdispR)
+    realdisp = np.float32(tmdispR)
+    disp2nd =  np.float32(tmdispL)
     plt.subplot(1,2,1)
     plt.imshow(realdisp)
     otherpoints3d = cv2.reprojectImageTo3D(disp2nd, Q.astype(np.float32),handleMissingValues=False,ddepth=-1)
@@ -436,7 +517,7 @@ def reconstruct3D(event):
     print("Median",(np.median(z))) 
     print("STD",(np.std(z))) 
     
-    colors = cv2.cvtColor(imgL, cv2.COLOR_BGR2RGB)
+    colors = cv2.cvtColor(rectR, cv2.COLOR_BGR2RGB)
     
     output_colors = colors[realdisp!=0]
     other_colors = colors[disp2nd!=0]
@@ -446,7 +527,6 @@ def reconstruct3D(event):
     output_file_sgbm = f'1stPass {str(img_no)}.ply'
     
     print(output_points_sgbm)
-    # ax.scatter(output_points_sgbm[:,0], output_points_sgbm[:,1], output_points_sgbm[:,2], c = output_colors/255, s=0.01)
     print (" Creating the output file... ")
     write_pointcloud(output_points_sgbm, output_colors, output_file_sgbm)
     print (f"\n  output file {output_file_sgbm} created. \n")
@@ -455,14 +535,9 @@ def reconstruct3D(event):
     
     button3D.label.set_text("Reconstructed")
 
-    # plt.figure(2)
-    # ax = plt.axes(projection='3d')
-    # ax.scatter(output_points_sgbm[:,0], output_points_sgbm[:,1], output_points_sgbm[:,2], c = output_colors/255, s=0.01)
 
 
-
-
-ax3D= plt.axes([0.7, 0.42, 0.15, 0.04])
+ax3D= fig.add_axes([0.7, 0.42, 0.15, 0.04])
 button3D = Button(ax3D, '3DRecon', color=axcolor, hovercolor='0.975')
 
 button3D.on_clicked(reconstruct3D)
@@ -470,7 +545,7 @@ button3D.on_clicked(reconstruct3D)
 
 # Update depth map parameters and redraw
 def update(val):
-    global loading_settings, BS, WS, NOD, UR, highf, lowf, K, I, P2,Qscale
+    global loading_settings, BS, WS, NOD, UR, highf, lowf, K, I, SR,Qscale
     BS = int(sBS.val/2)*2+1 #convert to ODD   
     WS = int(sWS.val)    
     NOD = int(sNOD.val/16)*16
@@ -478,7 +553,7 @@ def update(val):
     highf= float(shighf.val)
     lowf = float(slowf.val)
     I = float(sI.val)
-    P2 = 32*3*BS**2#int(sP2.val)
+    SR = int(sSR.val)
     Qscale = float(sQscale.val)
     K =float(sK.val) 
 
@@ -492,12 +567,9 @@ sUR.on_changed(update)
 shighf.on_changed(update)
 slowf.on_changed(update)
 sI.on_changed(update)
-sP2.on_changed(update)
+sSR.on_changed(update)
 sK.on_changed(update)
 sQscale.on_changed(update)
 
 print('Show interface to user')
 plt.show()
-
-# plt.imshow(tmdisp_visual)
-# plt.show()

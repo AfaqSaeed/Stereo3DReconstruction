@@ -57,8 +57,43 @@ cpdef int[:,:] customdisparity(unsigned char[:,:]imgL,unsigned char[:,:]imgR,int
                 disparity[i-box_size:i+box_size,j-box_size:j+box_size] = d
 
     return disparity    
-        
-cpdef np.ndarray[np.int32_t ,ndim=2] keydisparity(unsigned char[:,:]imgL,unsigned char[:,:]imgR,int box_size,np.ndarray[np.int32_t ,ndim=2] ptsL, np.ndarray[np.int32_t ,ndim=2]ptsR):
+def matchtemplate(imgL,imgR,pt,d,win_size,searchrange):
+    (j,i) = pt
+    searcharea = searchrange + win_size 
+    template = imgL[i-win_size:i+win_size,j-win_size:j+win_size]
+    searchstrip = imgR[i-win_size:i+win_size,(j-d)-searcharea:(j-d)+(searcharea)]
+    result  = cv2.matchTemplate(np.uint8(searchstrip),np.uint8(template),cv2.TM_CCOEFF)
+
+    result = np.reshape(result,result.shape[1])
+    # print(result.shape)
+    sort = np.argsort(-1*result)
+    top3 = sort[:3] 
+    # print("Top3",top3)
+    topdisp = (d - searchrange)+ top3
+    # print("TopDisp",topdisp)
+    
+    distfromd = abs(topdisp-d)
+    # print("DisttfrmD",distfromd)
+    bestindx = np.argsort(distfromd)
+    # print("bestindx",bestindx)
+    best = topdisp[bestindx[0]]
+    
+    return best
+
+
+cpdef int get_nearest(np.ndarray[np.int32_t ,ndim=2] pts, np.ndarray[np.int32_t ,ndim=1] pt):
+    cdef np.ndarray[np.int32_t ,ndim=2] diff
+    cdef np.ndarray[np.double_t ,ndim=1] dist
+    cdef np.ndarray[np.longlong_t ,ndim=1] indx
+    diff = pts-pt
+    
+    dist = np.linalg.norm(diff,axis=1)
+    indx = np.argsort(dist)
+    return int(indx[0])
+
+
+
+cpdef np.ndarray[np.int32_t ,ndim=2] keydisparity(unsigned char[:,:]imgL,unsigned char[:,:]imgR,int box_size,np.ndarray[np.int32_t ,ndim=2] ptsL, np.ndarray[np.int32_t ,ndim=2]ptsR,int win_size,int searchrange):
     cdef int h,w,d,i,j
     cdef float total
     cdef np.ndarray[np.int32_t ,ndim=2] disparity 
@@ -66,7 +101,8 @@ cpdef np.ndarray[np.int32_t ,ndim=2] keydisparity(unsigned char[:,:]imgL,unsigne
     cdef np.ndarray[np.int32_t,ndim = 1] disp
     h,w = imgL.shape[:2]
     disparity = np.zeros((h,w),dtype=np.int32)
-    cdef np.ndarray[np.int64_t,ndim = 1] index
+    cdef np.ndarray[np.int32_t,ndim = 1] point
+    cdef int index 
     cdef np.ndarray[np.double_t,ndim = 1] distance,ratios
 
     disp = ptsL[:,0]-ptsR[:,0]
@@ -80,26 +116,14 @@ cpdef np.ndarray[np.int32_t ,ndim=2] keydisparity(unsigned char[:,:]imgL,unsigne
     
     for i in tqdm(height):
         for j in  width:
-
-            distance = np.sqrt(np.square(ptsL[:,1]-i)+np.square(ptsL[:,0]-j))
-        
-            index = np.argsort(distance)
-            
-            index = index[np.sort(distance)!= 0]
-            
-            total = np.sum((1/distance[index[0:5]]))
-            ratios = 1/distance[index[0:5]] 
-            
+            point = np.array([j,i])
+            index = get_nearest(ptsL,point)
+            d = disp[index]
             try:
-                d = int(np.dot(disp[index[0:5]],ratios.T)/total )
-                disparity[i-box_size:i+box_size,j-box_size:j+box_size]=d
-            
+                d = matchtemplate(imgL,imgR,point,d,win_size,searchrange)
             except:
-                disparity[i-box_size:i+box_size,j-box_size:j+box_size]=d
-            
-        
-            
-
+                pass 
+            disparity[i-box_size:i+box_size,j-box_size:j+box_size] = d
             
     return disparity 
 

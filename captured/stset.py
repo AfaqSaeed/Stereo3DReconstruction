@@ -22,3 +22,4 @@ def st_rectify(imgL, imgR, left_stereo_map, right_stereo_map):
     rectR = cv2.remap(imgR,right_stereo_map[0], right_stereo_map[1], cv2.INTER_LANCZOS4, cv2.BORDER_CONSTANT, 0)
 
     return rectL, rectR
+print(np.sum([True,True]))
