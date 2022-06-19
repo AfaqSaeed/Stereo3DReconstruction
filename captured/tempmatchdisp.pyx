@@ -93,7 +93,7 @@ cpdef int get_nearest(np.ndarray[np.int32_t ,ndim=2] pts, np.ndarray[np.int32_t 
 
 
 
-cpdef np.ndarray[np.int32_t ,ndim=2] keydisparity(unsigned char[:,:]imgL,unsigned char[:,:]imgR,int box_size,np.ndarray[np.int32_t ,ndim=2] ptsL, np.ndarray[np.int32_t ,ndim=2]ptsR,int win_size,int searchrange):
+cpdef np.ndarray[np.int32_t ,ndim=2] keydisparity(unsigned char[:,:]imgL,unsigned char[:,:]imgR,int box_size,np.ndarray[np.int32_t ,ndim=2] ptsL, np.ndarray[np.int32_t ,ndim=2]ptsR,int win_size,int searchrange,int yshift,int minclip,int maxclip):
     cdef int h,w,d,i,j
     cdef float total
     cdef np.ndarray[np.int32_t ,ndim=2] disparity 
@@ -123,7 +123,9 @@ cpdef np.ndarray[np.int32_t ,ndim=2] keydisparity(unsigned char[:,:]imgL,unsigne
                 d = matchtemplate(imgL,imgR,point,d,win_size,searchrange)
             except:
                 pass 
-            disparity[i-box_size:i+box_size,j-box_size:j+box_size] = d
+            if d>minclip and d<maxclip:
+
+                disparity[i-(yshift+box_size):i+(yshift+box_size),j-box_size:j+box_size] = d
             
     return disparity 
 

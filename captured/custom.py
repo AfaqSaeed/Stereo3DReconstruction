@@ -50,9 +50,9 @@ bluepts = None
 BS = 5
 WS = 30
 NOD = 192
-UR = 10
-highf = 100
-lowf = 32
+YS = 10
+highf = 270
+lowf = 190
 K = 0.6
 I = 0.0
 SR = 10
@@ -206,14 +206,6 @@ def siftkpts(rectL,rectR,fthresh):
     ptsR = np.int32(ptsR)
     return ptsL,ptsR
 # To keep variables in a specified range
-def bound(var,limit,max):
-    if max:
-        if var>limit:
-            var=limit
-    else:
-        if var<limit:
-            var = limit
-    return var               
 def filterbadkpoints(ptsL,ptsR,epsilon=5,rneg=False):
     
     # remove negative disparity
@@ -238,6 +230,14 @@ def filterbadkpoints(ptsL,ptsR,epsilon=5,rneg=False):
     # print("After removing Duplicates",ptsL.shape,ptsL[0])
     
     return ptsL,ptsR
+def bound(var,limit,max):
+    if max:
+        if var>limit:
+            var=limit
+    else:
+        if var<limit:
+            var = limit
+    return var               
 
 def getmorekeypoints(rectL,rectR,ptsL,ptsR,win_size,K,I):
     nptsL = []
@@ -346,15 +346,16 @@ def stereo_depth_map(rectified_pair):
     dmLeft = rectified_pair[0]
     dmRight = rectified_pair[1]
 
-    print ('BS='+str(BS)+' WS='+str(WS)+' NOD='+str(NOD)+' UR='+\
-           str(UR)+' High='+str(highf)+' LowFilt='+str(lowf))
+    print ('BS='+str(BS)+' WS='+str(WS)+' NOD='+str(NOD)+' YS='+\
+           str(YS)+' High='+str(highf)+' LowFilt='+str(lowf))
     print (' K='+str(K)+' I='+str(I)+' SR='+str(SR))
     
 
     print("Keypoint matching Disparity")
     tmdispL   = kpdisp1stpass(dmLeft,dmRight,K)#customdisparity(dmLeft,dmRight,BS,NOD,0,WS)
 
-    tmdispR   = keydisparity(dmLeft,dmRight,BS,ptsL,ptsR,WS,SR)
+    tmdispR   = keydisparity(dmLeft,dmRight,BS,ptsL,ptsR,WS,SR,YS,lowf,highf)
+    tmdispR   = cv2.blur(tmdispR,(5,5))
     # tmdispR  = np.zeros(dmLeft.shape[:2])
 
     return tmdispL,tmdispR
@@ -381,7 +382,7 @@ def save_map_settings( event ):
     buttons.label.set_text ("Saving...")
     print('Saving to file...') 
     result = json.dumps({'ImageNo':img_no,'blockSize':BS, 'WindowSize':WS, 'numDisparities':NOD, \
-             'uniquenessRatio':UR, 'HighFilter':highf, 'LowFilter':lowf, \
+             'Yshift':YS, 'HighFilter':highf, 'LowFilter':lowf, \
              'Kvalue':K, 'I':I, 'SR':SR,'Qscale':Qscale},\
              sort_keys=True, indent=4, separators=(',',':'))
     fName = 'TMDisp3D.txt'
@@ -396,7 +397,7 @@ buttons.on_clicked(save_map_settings)
 loadax = fig.add_axes([0.1, 0.42, 0.15, 0.04]) #stepX stepY width height
 buttonl = Button(loadax, 'Load settings', color=axcolor, hovercolor='0.975')
 def load_map_settings( event ):
-    global loading_settings, BS, WS, NOD, UR, highf, lowf, K, I, SR
+    global loading_settings, BS, WS, NOD, YS, highf, lowf, K, I, SR
     loading_settings = 1
     fName = '3dmap_set.txt'
     print('Loading parameters from file...')
@@ -406,7 +407,7 @@ def load_map_settings( event ):
     sBS.set_val(data['blockSize'])
     sWS.set_val(data['WindowSize'])
     sNOD.set_val(data['numDisparities'])
-    sUR.set_val(data['uniquenessRatio'])
+    sYS.set_val(data['Yshift'])
     shighf.set_val(data['HighFilter'])
     slowf.set_val(data['LowFilter'])
     sK.set_val(data['Kvalue'])
@@ -433,17 +434,17 @@ PFCaxe = fig.add_axes([0.15, 0.09, 0.7, 0.025], facecolor=axcolor) #stepX stepY 
 WSaxe = fig.add_axes([0.15, 0.13, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
 NODaxe = fig.add_axes([0.15, 0.17, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
 TTHaxe = fig.add_axes([0.15, 0.21, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height 
-URaxe = fig.add_axes([0.15, 0.25, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
+YSaxe = fig.add_axes([0.15, 0.25, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
 SRaxe = fig.add_axes([0.15, 0.29, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
 SPWSaxe = fig.add_axes([0.15, 0.33, 0.7, 0.025], facecolor=axcolor) #stepX stepY width height
 Qscaleaxe = fig.add_axes([0.15, 0.37, 0.7, 0.025], facecolor=axcolor)
 sBS = Slider(SWSaxe, 'BlockSize', 0.0, 100.0, valinit=5)
 sWS = Slider(PFSaxe, 'WindowSize', 0, 100.0, valinit=30)
 sNOD = Slider(PFCaxe, 'NumOfDisp', 0.0, 120, valinit=30)
-sUR = Slider(WSaxe, 'UnicRatio', 1.0, 20.0, valinit=2)
-shighf = Slider(NODaxe, 'FHighThresh', 0.0, 1.0, valinit=0.95)
-slowf = Slider(TTHaxe, 'FLowThresh', 0.0, 1.0, valinit=0.15)
-sK = Slider(URaxe, 'KPOrgThresh', 0.0, 1.0, valinit=0.6)
+sYS = Slider(WSaxe, 'Yrange', 1.0, 20.0, valinit=2)
+slowf = Slider(TTHaxe, 'FLowThresh', 0, 200, valinit=190)
+shighf = Slider(NODaxe, 'FHighThresh', int(slowf.val),400 , valinit=270)
+sK = Slider(YSaxe, 'KPOrgThresh', 0.0, 1.0, valinit=0.6)
 sI = Slider(SRaxe, 'KpIncThresh', 0.0, 1.0, valinit=0.0)
 sSR = Slider(SPWSaxe, 'SR', 0.0, 120.0, valinit=10)
 sQscale = Slider(Qscaleaxe, 'Q', 0.0000, 1.0000, valinit=0.01)
@@ -545,13 +546,13 @@ button3D.on_clicked(reconstruct3D)
 
 # Update depth map parameters and redraw
 def update(val):
-    global loading_settings, BS, WS, NOD, UR, highf, lowf, K, I, SR,Qscale
+    global loading_settings, BS, WS, NOD, YS, highf, lowf, K, I, SR,Qscale
     BS = int(sBS.val/2)*2+1 #convert to ODD   
     WS = int(sWS.val)    
     NOD = int(sNOD.val/16)*16
-    UR = int(sUR.val)  
-    highf= float(shighf.val)
-    lowf = float(slowf.val)
+    YS = int(sYS.val)  
+    highf= int(shighf.val)
+    lowf = int(slowf.val)
     I = float(sI.val)
     SR = int(sSR.val)
     Qscale = float(sQscale.val)
@@ -563,7 +564,7 @@ def update(val):
 sBS.on_changed(update)
 sWS.on_changed(update)
 sNOD.on_changed(update)
-sUR.on_changed(update)
+sYS.on_changed(update)
 shighf.on_changed(update)
 slowf.on_changed(update)
 sI.on_changed(update)

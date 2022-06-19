@@ -38,6 +38,39 @@ searchrange = 5
 
 imgR = cv2.imread("E:/Stereo-3D-Reconstruction/captured/rectified/8_L_.png")
 imgL  = cv2.imread("E:/Stereo-3D-Reconstruction/captured/rectified/8_R_.png")
+# https://docs.opencv.org/3.0-beta/modules/video/doc/motion_analysis_and_object_tracking.html#calcopticalflowfarneback
+# mask = np.zeros_like(imgL)
+# imgL = cv2.cvtColor(imgL,cv2.COLOR_BGR2GRAY)
+# imgR = cv2.cvtColor(imgR,cv2.COLOR_BGR2GRAY)
+
+# # Sets image saturation to maximum
+# # Sts image saturation to maximum
+# mask[..., 1] = 255
+# mask[..., 1] = 255    
+# flow = cv2.calcOpticalFlowFarneback(imgL, imgR, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+# # Computes the magnitude and angle of the 2D vectors
+# # Computes the magnitude and angle of the 2D vectors
+# magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+# magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+# # Sets image hue according to the optical flow direction
+# # Sets image hue according to the optical flow direction
+# mask[..., 0] = angle * 180 / np.pi / 2
+
+# # Sets image value according to the optical flow magnitude (normalized)
+# # Sets image value according to the optical flow magnitude (normalized)
+# mask[..., 2] = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
+# mask[..., 2] = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
+# # Converts HSV to RGB (BGR) color representation
+# # Converts HSV to RGB (BGR) color representation
+# rgb = cv2.cvtColor(mask, cv2.COLOR_HSV2BGR)
+
+# # Opens a new window and displays the Soutput frame
+# # Opens a new window and displays the output frame
+# rgb = cv2.resize(rgb,(800,600))
+# cv2.imshow("dense optical flow", rgb)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+    
 def matchtemplate(imgL,imgR,pt,d,win_size,searchrange):
     (j,i) = pt
     searcharea = searchrange + win_size 
@@ -87,7 +120,7 @@ def matchtemplate(imgL,imgR,pt,d,win_size,searchrange):
 #             try:
 #                 d = int(np.dot(disp[index[0:5]],ratios.T)/total )
 def siftkpts(rectL,rectR,fthresh):
-    sift = cv2.  ()
+    sift = cv2.SIFT_create()
 
     kp1, des1 = sift.detectAndCompute(rectL, None)
     kp2, des2 = sift.detectAndCompute(rectR, None)
@@ -105,7 +138,20 @@ def siftkpts(rectL,rectR,fthresh):
     # https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
     matchesMask = [[0, 0] for i in range(len(matches))]
     ptsL = []
-       def filterbadkpoints(ptsL,ptsR,epsilon=5,rneg=False):
+    ptsR = []
+
+    for i, (m, n) in enumerate(matches):
+        if m.distance < fthresh*n.distance:
+            # Keep this keypoint pair
+            matchesMask[i] = [1, 0]
+            ptsR.append(kp2[m.trainIdx].pt)
+            ptsL.append(kp1[m.queryIdx].pt)
+
+    ptsL = np.int32(ptsL)
+    ptsR = np.int32(ptsR)
+    return ptsL,ptsR
+# To
+def filterbadkpoints(ptsL,ptsR,epsilon=5,rneg=False):
     
     # remove negative disparity
     if rneg:
@@ -120,12 +166,12 @@ def siftkpts(rectL,rectR,fthresh):
     ptsL = ptsL[(diff < epsilon) & diff > (-1*epsilon)]
     ptsR = ptsR[(diff < epsilon) & diff > (-1*epsilon)]
     # print("Before removing Duplicates",ptsL.shape,ptsL[0])
-    comptsLR=np.hstack((ptsL,ptsR))
-    _,indices = np.unique(comptsLR,axis=0,return_index=True)
+    # comptsLR=np.hstack((ptsL,ptsR))
+    # _,indices = np.unique(comptsLR,axis=0,return_index=True)
  
-    ptsL = ptsL[indices]
+    # ptsL = ptsL[indices]
     
-    ptsR = ptsR[indices]
+    # ptsR = ptsR[indices]
     # print("After removing Duplicates",ptsL.shape,ptsL[0])
     
     return ptsL,ptsR
@@ -179,8 +225,64 @@ def keydisparity(imgL,imgR,box_size, ptsL, ptsR, win_size, searchrange):
             disparity[i-box_size:i+box_size,j-box_size:j+box_size] = d
             
     return disparity 
+def bound(var,limit,max):
+    if max:
+        if var>limit:
+            var=limit
+    else:
+        if var<limit:
+            var = limit
+    return var               
+
+def getmorekeypoints(rectL,rectR,ptsL,ptsR,win_size,K,I):
+    nptsL = []
+    nptsR = []
+    for ptsl,ptsr in tqdm(zip(ptsL,ptsR),total =ptsL.shape[0]):
+             a,b = ptsl[1] - win_size,ptsl[1] + win_size
+             c,d = ptsl[0] - win_size,ptsl[0] + win_size
+             e,f = ptsr[1] - win_size,ptsr[1] + win_size
+             g,h = ptsr[0] - win_size,ptsr[0] + win_size
+             a,b = bound(a,0,False),bound(b,1200,True)
+             c,d = bound(c,0,False),bound(d,1600,True)
+             e,f = bound(e,0,False),bound(f,1200,True)
+             g,h = bound(g,0,False),bound(h,1600,True)
+             left  = rectL[a:b,c:d]
+             
+             right = rectR[e:f,g:h]
+            #  print(left.shape)
+            #  print(right.shape)
+             if left.shape != right.shape:
+                 continue
+             try:
+                zptsl,zptsr = siftkpts(left,right,K+I)
+                fptsl,fptsr = filterbadkpoints(zptsl,zptsr,rneg=False)
+                
+             except:
+                 print("Getting more Kpts sift failed")
+                 continue
+             
+             sleft  = cv2.circle(left.copy(),fptsl[0],2,(255,0,0),1)
+             sright = cv2.circle(right.copy(),fptsr[0],2,(255,0,0),1)
+             plt.subplot(1,2,1)
+             plt.imshow(sleft)             
+             plt.subplot(1,2,2)
+             plt.imshow(sright)
+             plt.show()
+             
+             zptsl,zptsr = zptsl-win_size,zptsr-win_size
+             
+             nptsL.extend(ptsl+zptsl)
+             nptsR.extend(ptsr+zptsr)
+    
+    nptsL = np.array(nptsL) 
+    nptsR = np.array(nptsR)
+
+    return nptsL,nptsR
+
 ptsL,ptsR   = siftkpts(imgL,imgR,0.6)#customdisparity(dmLeft,dmRight,BS,NOD,0,WS)
 ptsL,ptsR = filterbadkpoints(ptsL,ptsR)
-disp = keydisparity(imgL,imgR,3,ptsL,ptsR,30,0)
-plt.imshow(disp,cmap = "rainbow")
-plt.show()
+ptsL,ptsR   = getmorekeypoints(imgL,imgR,ptsL,ptsR,30,0.6,0.3)#customdisparity(dmLeft,dmRight,BS,NOD,0,WS)
+
+# disp = keydisparity(imgL,imgR,3,ptsL,ptsR,30,0)
+# plt.imshow(disp,cmap = "rainbow")
+# plt.show()
