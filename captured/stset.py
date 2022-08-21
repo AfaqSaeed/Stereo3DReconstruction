@@ -15,7 +15,7 @@ def st_maps(calib_params, im_dim):
     left_stereo_map = cv2.initUndistortRectifyMap(MLS, dLS, RL, PL, im_dim, cv2.CV_16SC2) 
     right_stereo_map = cv2.initUndistortRectifyMap(MRS, dRS, RR, PR, im_dim, cv2.CV_16SC2)
 
-    return left_stereo_map, right_stereo_map, Q,MLS,MRS
+    return left_stereo_map, right_stereo_map, Q,MLS,MRS,RL,RR
 
 def st_rectify(imgL, imgR, left_stereo_map, right_stereo_map):
     rectL = cv2.remap(imgL,left_stereo_map[0], left_stereo_map[1], cv2.INTER_LANCZOS4, cv2.BORDER_CONSTANT, 0)  

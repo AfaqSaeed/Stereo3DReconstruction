@@ -150,8 +150,9 @@ def siftkpts(rectL,rectR,fthresh):
     ptsL = np.int32(ptsL)
     ptsR = np.int32(ptsR)
     return ptsL,ptsR
-# To
-def filterbadkpoints(ptsL,ptsR,epsilon=5,rneg=False):
+# Removes negative values and also points that voilate the epipolar constraint 
+# Should try adding horizontal constraint as well 
+def filterbadkpoints(ptsL,ptsR,vertuncert=5,horiuncert=5,rneg=False):
     
     # remove negative disparity
     if rneg:
@@ -163,8 +164,8 @@ def filterbadkpoints(ptsL,ptsR,epsilon=5,rneg=False):
     yR = ptsR[:,1]
     
     diff = yL-yR
-    ptsL = ptsL[(diff < epsilon) & diff > (-1*epsilon)]
-    ptsR = ptsR[(diff < epsilon) & diff > (-1*epsilon)]
+    ptsL = ptsL[(diff < vertuncert) & diff > (-1*vertuncert)]
+    ptsR = ptsR[(diff < vertuncert) & diff > (-1*vertuncert)]
     # print("Before removing Duplicates",ptsL.shape,ptsL[0])
     # comptsLR=np.hstack((ptsL,ptsR))
     # _,indices = np.unique(comptsLR,axis=0,return_index=True)
@@ -256,21 +257,22 @@ def getmorekeypoints(rectL,rectR,ptsL,ptsR,win_size,K,I):
              try:
                 zptsl,zptsr = siftkpts(left,right,K+I)
                 fptsl,fptsr = filterbadkpoints(zptsl,zptsr,rneg=False)
-                
+                   
              except:
                  print("Getting more Kpts sift failed")
                  continue
              
-             sleft  = cv2.circle(left.copy(),fptsl[0],2,(255,0,0),1)
-             sright = cv2.circle(right.copy(),fptsr[0],2,(255,0,0),1)
+             sleft  = cv2.circle(left.copy(),fptsl[0],0,(255,0,0),-1)
+             sright = cv2.circle(right.copy(),fptsr[0],0,(255,0,0),-1)
              plt.subplot(1,2,1)
              plt.imshow(sleft)             
              plt.subplot(1,2,2)
              plt.imshow(sright)
              plt.show()
-             
+             print(zptsl,zptsr)
              zptsl,zptsr = zptsl-win_size,zptsr-win_size
-             
+             print(zptsl,zptsr)
+             print("Orignal kpts",ptsl,ptsr)
              nptsL.extend(ptsl+zptsl)
              nptsR.extend(ptsr+zptsr)
     

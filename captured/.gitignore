@@ -1,6 +1,6 @@
-/both
-/left
-/right
-/test_zain
+/3DReconstructions
+/test
 *.zip
 *.ply
+*.pyd
+/build

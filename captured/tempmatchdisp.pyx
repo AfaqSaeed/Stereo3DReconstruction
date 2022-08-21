@@ -93,11 +93,11 @@ cpdef int get_nearest(np.ndarray[np.int32_t ,ndim=2] pts, np.ndarray[np.int32_t 
 
 
 
-cpdef np.ndarray[np.int32_t ,ndim=2] keydisparity(unsigned char[:,:]imgL,unsigned char[:,:]imgR,int box_size,np.ndarray[np.int32_t ,ndim=2] ptsL, np.ndarray[np.int32_t ,ndim=2]ptsR,int win_size,int searchrange,int yshift,int minclip,int maxclip):
-    cdef int h,w,d,i,j
+cpdef np.ndarray[np.int32_t ,ndim=2] keydisparity(unsigned char[:,:]imgL,unsigned char[:,:]imgR,int box_size,np.ndarray[np.int32_t ,ndim=2] ptsL, np.ndarray[np.int32_t ,ndim=2]ptsR):
+    cdef int h,w,d,i,j,lowestx
     cdef float total
     cdef np.ndarray[np.int32_t ,ndim=2] disparity 
-    cdef np.ndarray[np.double_t,ndim = 1] height,width 
+    cdef np.ndarray[np.int32_t,ndim = 1] height,width 
     cdef np.ndarray[np.int32_t,ndim = 1] disp
     h,w = imgL.shape[:2]
     disparity = np.zeros((h,w),dtype=np.int32)
@@ -111,22 +111,17 @@ cpdef np.ndarray[np.int32_t ,ndim=2] keydisparity(unsigned char[:,:]imgL,unsigne
     disp = disp[disp>0]
     
 
-    width = np.arange(box_size,w-box_size,box_size,dtype=np.double)
-    height = np.arange(box_size,h-box_size,box_size,dtype=np.double)
+    height = np.arange(box_size,h-box_size,box_size,dtype=np.int32)
+    lowestx = np.min(ptsL[:,0])
+    width = np.arange(lowestx,w-box_size,box_size,dtype=np.int32)
     
     for i in tqdm(height):
         for j in  width:
             point = np.array([j,i])
             index = get_nearest(ptsL,point)
             d = disp[index]
-            try:
-                d = matchtemplate(imgL,imgR,point,d,win_size,searchrange)
-            except:
-                pass 
-            if d>minclip and d<maxclip:
-
-                disparity[i-(yshift+box_size):i+(yshift+box_size),j-box_size:j+box_size] = d
-            
+           
+            disparity[i-(box_size):i+(box_size),j-box_size:j+box_size] = d        
     return disparity 
 
 

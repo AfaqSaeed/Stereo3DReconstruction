@@ -206,20 +206,20 @@ def siftkpts(rectL,rectR,fthresh):
     ptsR = np.int32(ptsR)
     return ptsL,ptsR
 # To keep variables in a specified range
-def filterbadkpoints(ptsL,ptsR,epsilon=5,rneg=False):
+def filterbadkpoints(ptsL,ptsR,epsilon=10,xrangel=None,xrangeh=None):
     
-    # remove negative disparity
-    if rneg:
+    # if low and high range provided remove negative disparity
+    if xrangeh and xrangel:
         disp = ptsL[:,0]-ptsR[:,0]
-        ptsL = ptsL[disp>0]
-        ptsR = ptsR[disp>0]
+        ptsL = ptsL[np.bitwise_and(disp<xrangeh,disp>xrangel)]
+        ptsR = ptsR[np.bitwise_and(disp<xrangeh,disp>xrangel)]
     # remove any points that violate epipolar constraint
     yL = ptsL[:,1]
     yR = ptsR[:,1]
     
     diff = yL-yR
-    ptsL = ptsL[(diff < epsilon) & diff > (-1*epsilon)]
-    ptsR = ptsR[(diff < epsilon) & diff > (-1*epsilon)]
+    ptsL = ptsL[np.bitwise_and((diff < epsilon) , diff > (-1*epsilon))]
+    ptsR = ptsR[np.bitwise_and((diff < epsilon) , diff > (-1*epsilon))]
     # print("Before removing Duplicates",ptsL.shape,ptsL[0])
     comptsLR=np.hstack((ptsL,ptsR))
     _,indices = np.unique(comptsLR,axis=0,return_index=True)
@@ -260,7 +260,7 @@ def getmorekeypoints(rectL,rectR,ptsL,ptsR,win_size,K,I):
                  continue
              try:
                 zptsl,zptsr = siftkpts(left,right,K+I)
-                filterbadkpoints(zptsl,zptsr,rneg=False)
+                filterbadkpoints(zptsl,zptsr,epsilon=5)
              except:
                  print("Getting more Kpts sift failed")
                  continue
@@ -270,16 +270,17 @@ def getmorekeypoints(rectL,rectR,ptsL,ptsR,win_size,K,I):
              nptsR.extend(ptsr+zptsr)
     
     nptsL = np.array(nptsL) 
-    nptsR = np.array(nptsR) 
-
+    nptsR = np.array(nptsR)
+     
+    
     return nptsL,nptsR
 def drawdisparity(imshape,nptsL,nptsR):
     disparity = np.zeros(imshape,dtype=np.int16)
     blob_size = BS
     for ptsl,ptsr in zip(nptsL,nptsR):
         d = ptsl[0]-ptsr[0]
-        if d>190 and d<270: 
-            disparity[ptsl[1]-blob_size:ptsl[1]+blob_size,ptsl[0]-blob_size:ptsl[0]+blob_size] =  d#+disparity[ptsl[1]-blob_size:ptsl[1]+blob_size,ptsl[0]-blob_size:ptsl[0]+blob_size]
+        # if d>190 and d<270: 
+        disparity[ptsl[1]-blob_size:ptsl[1]+blob_size,ptsl[0]-blob_size:ptsl[0]+blob_size] =  d#+disparity[ptsl[1]-blob_size:ptsl[1]+blob_size,ptsl[0]-blob_size:ptsl[0]+blob_size]
     return disparity
 
 def kpdisp2ndpass(rectL,rectR,K):
@@ -291,6 +292,9 @@ def kpdisp2ndpass(rectL,rectR,K):
     print("Points After Filtering",ptsR.shape ) 
     nptsL,nptsR = getmorekeypoints(rectL,rectR,ptsL,ptsR,win_size=50,K=K,I=I)
     print("Additional Keypoints added",nptsR.shape) 
+    nptsL,nptsR = filterbadkpoints(nptsL,nptsR,xrangel=190,xrangeh=270)
+    print("Points After Filtering",nptsR.shape ) 
+    
     nptsL = np.append(ptsL,nptsL,axis = 0)
     nptsR = np.append(ptsR,nptsR,axis = 0)
     print(nptsR.shape )                                          
@@ -332,7 +336,7 @@ def submit(text):
     axs[0].imshow(rectified_pair[0], 'gray')
 
     tmdispL,tmdispR= stereo_depth_map(rectified_pair)
-    axs[1].imshow(tmdispL, aspect='equal', cmap='jet')
+    axs[1].imshow(tmdispL, aspect='equal', cmap='gray')
     axs[2].imshow(tmdispR, aspect='equal', cmap='jet')
     
 
@@ -352,9 +356,9 @@ def stereo_depth_map(rectified_pair):
     
 
     print("Keypoint matching Disparity")
-    tmdispL   = kpdisp1stpass(dmLeft,dmRight,K)#customdisparity(dmLeft,dmRight,BS,NOD,0,WS)
+    tmdispL   = kpdisp2ndpass(dmLeft,dmRight,K)#customdisparity(dmLeft,dmRight,BS,NOD,0,WS)
 
-    tmdispR   = keydisparity(dmLeft,dmRight,BS,ptsL,ptsR,WS,SR,YS,lowf,highf)
+    tmdispR   = keydisparity(dmLeft,dmRight,BS,nptsL,nptsR)
     tmdispR   = cv2.blur(tmdispR,(5,5))
     # tmdispR  = np.zeros(dmLeft.shape[:2])
 
@@ -470,7 +474,7 @@ def updatedepthmap(event):
         tmdispL,tmdispR= stereo_depth_map(rectified_pair)
         
         
-        axs[1].imshow(tmdispL, aspect='equal', cmap='jet')
+        axs[1].imshow(tmdispL, aspect='equal', cmap='gray')
         axs[2].imshow(tmdispR, aspect='equal', cmap='jet')
 
 
@@ -501,7 +505,7 @@ def reconstruct3D(event):
     plt.subplot(1,2,1)
     plt.imshow(realdisp)
     otherpoints3d = cv2.reprojectImageTo3D(disp2nd, Q.astype(np.float32),handleMissingValues=False,ddepth=-1)
-    other_points = otherpoints3d[disp2nd != 0 ]#otherpoints[realdisp!=0]
+    other_points = otherpoints3d[np.bitwise_and(disp2nd!=0,disp2nd>190)]#otherpoints[realdisp!=0]
     
     print(Q)
     points_3D_sgbm = cv2.reprojectImageTo3D(realdisp, Q.astype(np.float32),handleMissingValues=False,ddepth=-1)
@@ -511,7 +515,7 @@ def reconstruct3D(event):
     plt.imshow(z)
     plt.show()
     
-    output_points_sgbm = points_3D_sgbm[realdisp != 0 ]#otherpoints[realdisp!=0]
+    output_points_sgbm = points_3D_sgbm[np.bitwise_and(realdisp!=0,realdisp>190)]#otherpoints[realdisp!=0]
     z=output_points_sgbm[:,2]
     print("Disparity Average",(np.average(realdisp[realdisp!=0])))
     print("Average",(np.average(z)))
@@ -520,8 +524,8 @@ def reconstruct3D(event):
     
     colors = cv2.cvtColor(rectR, cv2.COLOR_BGR2RGB)
     
-    output_colors = colors[realdisp!=0]
-    other_colors = colors[disp2nd!=0]
+    output_colors = colors[np.bitwise_and(realdisp!=0,realdisp>190)]
+    other_colors = colors[np.bitwise_and(disp2nd!=0,disp2nd>190)]
    
     other_file = f'2ndPass {str(img_no)}.ply'
 
